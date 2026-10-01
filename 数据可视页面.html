@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
         <script src="asset-loading.js" defer></script>
-    <meta name="viewport" content="width=1527, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="stylesheet" href="responsive-layout.css">
     <style>
       html, body {
         margin: 0;
@@ -6456,6 +6457,11 @@
             window.addEventListener('resize', function() {
                 bindCloseModelBtn();
                 bindIndexButtons();
+                update3DRendererSize();
+                document.querySelectorAll('.chart-container').forEach((chartElement) => {
+                    const chart = echarts.getInstanceByDom(chartElement);
+                    if (chart) chart.resize();
+                });
             });
             
             // 初始化书页内容
@@ -6499,6 +6505,28 @@
             
             // 3D模型相关变量
             let scene, camera, renderer, controls, model;
+            let animationFrameId = null;
+            let modelLoadToken = 0;
+
+            function update3DRendererSize() {
+                const container = document.getElementById('model-container');
+                if (!container || !renderer || !camera) return;
+                const width = Math.max(1, container.clientWidth);
+                const height = Math.max(1, container.clientHeight);
+                renderer.setSize(width, height, false);
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+            }
+
+            function setModelLoadingStatus(message, progress) {
+                const status = document.getElementById('model-loading-status');
+                if (!status) return;
+                status.textContent = message;
+                status.style.display = message ? 'block' : 'none';
+                if (typeof progress === 'number') {
+                    status.dataset.progress = String(Math.round(progress));
+                }
+            }
             
             // 初始化3D场景
             function init3DScene() {
@@ -6535,6 +6563,12 @@
                 
                 // 添加渲染器到容器
                 container.appendChild(renderer.domElement);
+
+                const loadingStatus = document.createElement('div');
+                loadingStatus.id = 'model-loading-status';
+                loadingStatus.textContent = '正在加载建筑模型…';
+                loadingStatus.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 18px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:15px;z-index:1002;pointer-events:none;white-space:nowrap;';
+                container.appendChild(loadingStatus);
                 
                 // 确保按钮始终显示在渲染器之上
                 // 重新创建按钮，确保它在DOM中的位置正确
@@ -6630,6 +6664,8 @@
             // 加载GLB模型
             function loadGLBModel() {
                 console.log('Loading GLB model...');
+                const loadToken = ++modelLoadToken;
+                setModelLoadingStatus('正在连接模型资源…');
                 
                 // 根据当前页面索引选择对应的GLB文件
                 let modelPath;
@@ -6675,7 +6711,7 @@
                             console.log('Model loaded successfully:', gltf);
                             
                             // 确保场景存在（防止异步加载完成时场景已被销毁）
-                            if (!scene) {
+                            if (!scene || loadToken !== modelLoadToken) {
                                 console.warn('Scene is null, cannot add model');
                                 return;
                             }
@@ -6714,12 +6750,16 @@
                             camera.lookAt(0, -0.9, 0); // 相机正对着模型中心（考虑模型下移）
                             
                             console.log('Model added to scene');
+                            setModelLoadingStatus('');
                         },
                         function (xhr) {
-                            console.log('Loading progress:', (xhr.loaded / xhr.total * 100) + '%');
+                            const percent = xhr.total ? (xhr.loaded / xhr.total * 100) : 0;
+                            console.log('Loading progress:', percent + '%');
+                            setModelLoadingStatus(xhr.total ? `正在加载建筑模型… ${Math.round(percent)}%` : '正在加载建筑模型…');
                         },
                         function (error) {
                             console.error('Error loading model:', error);
+                            setModelLoadingStatus('模型加载失败，请稍后重试');
                         }
                     );
                 } catch (error) {
@@ -6747,7 +6787,7 @@
             
             // 渲染循环
             function animate3D() {
-                requestAnimationFrame(animate3D);
+                animationFrameId = requestAnimationFrame(animate3D);
                 if (controls) controls.update();
                 if (renderer && scene && camera) {
                     renderer.render(scene, camera);
@@ -6756,10 +6796,35 @@
             
             // 清理3D资源
             function dispose3DScene() {
+                modelLoadToken++;
+                if (animationFrameId !== null) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+
+                if (model) {
+                    model.traverse((node) => {
+                        if (node.geometry) node.geometry.dispose();
+                        if (node.material) {
+                            const materials = Array.isArray(node.material) ? node.material : [node.material];
+                            materials.forEach((material) => {
+                                Object.values(material).forEach((value) => {
+                                    if (value && value.isTexture) value.dispose();
+                                });
+                                material.dispose();
+                            });
+                        }
+                    });
+                }
+
+                if (controls) {
+                    controls.dispose();
+                }
+
                 if (renderer) {
                     const container = document.getElementById('model-container');
                     if (container && renderer.domElement) {
-                        container.removeChild(renderer.domElement);
+                        renderer.domElement.remove();
                     }
                     renderer.dispose();
                     renderer = null;

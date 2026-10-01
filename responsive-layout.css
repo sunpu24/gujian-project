@@ -1,0 +1,194 @@
+/* Shared viewport layout rules.
+   The original pages were authored for a 1527 x 740 presentation canvas.
+   Keep the artwork and interactions, but let each page use the browser viewport. */
+html,
+body {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+body {
+  position: relative;
+}
+
+#video-container,
+#loading-container,
+#guide-container,
+#choose-card-container,
+#detail-page,
+#main-container,
+#secondary-page,
+#文创-container {
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+}
+
+#video-container,
+#loading-container,
+#guide-container,
+#main-container,
+#文创-container {
+  position: relative;
+}
+
+#secondary-page {
+  position: fixed !important;
+}
+
+#intro-video,
+#video-container > video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+/* Full-screen overlays created by the page scripts. */
+#ai-chat-modal,
+#ar-experience-modal,
+.video-overlay,
+.video-container,
+.video-container video,
+.overlay,
+.trigger-box {
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+#direction-arrows,
+#start-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#top-nav,
+#top-nav-guide {
+  width: 100% !important;
+}
+
+.nav-container {
+  width: min(1200px, 100%) !important;
+  max-width: 100% !important;
+}
+
+/* The data page keeps its composition while adapting the available space. */
+#model-container {
+  width: min(750px, 90vw) !important;
+  height: min(500px, 72dvh) !important;
+}
+
+#visualization-left,
+#visualization-right {
+  width: clamp(220px, 25vw, 390px) !important;
+  max-width: 32vw !important;
+}
+
+#book-container {
+  width: min(550px, 42vw) !important;
+  height: min(350px, 43dvh) !important;
+}
+
+#visualization-bottom {
+  width: min(550px, 42vw) !important;
+  height: min(280px, 34dvh) !important;
+}
+
+/* Map and card pages use viewport-relative backgrounds and canvases. */
+.scene {
+  width: 100vw !important;
+  height: 100dvh !important;
+}
+
+.container {
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+}
+
+.section-grid {
+  height: calc(100dvh - 120px) !important;
+}
+
+.overview {
+  height: 100dvh !important;
+}
+
+/* Keep controls reachable on small screens. */
+@media (max-width: 900px) {
+  .nav-container {
+    justify-content: flex-start !important;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  #video-selector {
+    top: 56px !important;
+    left: 10px !important;
+    max-width: calc(100vw - 20px);
+  }
+
+  #video-selector .video-btn {
+    display: inline-block;
+    width: auto;
+    margin: 0 4px 0 0;
+    font-size: 12px;
+  }
+
+  #model-container {
+    width: 94vw !important;
+    height: 70dvh !important;
+  }
+
+  #visualization-left,
+  #visualization-right {
+    transform: scale(.72) translateY(-50%) !important;
+    transform-origin: center;
+  }
+
+  #visualization-left { left: -5% !important; }
+  #visualization-right { right: -5% !important; }
+
+  #book-container {
+    width: 58vw !important;
+  }
+}
+
+@media (max-width: 600px) {
+  #visualization-left,
+  #visualization-right {
+    display: none !important;
+  }
+
+  #book-container {
+    width: 88vw !important;
+    top: 12% !important;
+  }
+
+  #visualization-bottom {
+    width: 88vw !important;
+    bottom: 5% !important;
+  }
+
+  #secondary-buttons {
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* AI iframe/component pages should fill their embedding window. */
+html.ai-component,
+html.ai-component body,
+body.ai-component {
+  position: relative !important;
+  inset: auto !important;
+}

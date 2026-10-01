@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
         <script src="asset-loading.js" defer></script>
-    <meta name="viewport" content="width=1527, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="stylesheet" href="responsive-layout.css">
     <style>
       html, body {
         margin: 0;
@@ -42,8 +43,8 @@
         /* 视频容器 */
         #video-container {
             position: relative;
-            width: 1527px;
-            height: 740px;
+            width: 100vw;
+            height: 100dvh;
             overflow: hidden;
         }
         
@@ -103,13 +104,13 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 1527px;
-            height: 740px;
+            width: 100%;
+            height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 154px;
+            padding-top: clamp(90px, 20vh, 154px);
             opacity: 0;
             pointer-events: none;
             transition: opacity 1s ease;
@@ -165,6 +166,36 @@
         /* 开始按钮点击效果 */
         #start-btn:active {
             transform: scale(0.95);
+        }
+
+        #pause-hint {
+            position: absolute;
+            left: 50%;
+            bottom: 15%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.35);
+            color: #fff;
+            font-size: clamp(12px, 1.2vw, 16px);
+            letter-spacing: 1px;
+            text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+            z-index: 1;
+            animation: pauseHintPulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes pauseHintPulse {
+            0%, 100% { opacity: .65; }
+            50% { opacity: 1; }
+        }
+
+        @media (max-width: 600px) {
+            #start-container { padding-left: 16px; padding-right: 16px; }
+            #title-image { max-width: 90vw; max-height: 28vh; }
+            #subtitle { font-size: clamp(14px, 4vw, 20px); margin-bottom: 48px; }
+            #pause-hint { bottom: 22%; white-space: nowrap; }
         }
         
         /* ========== 问号图标样式 ========== */
@@ -572,7 +603,9 @@
             justify-content: center;
             align-items: center;
             pointer-events: none;
+            z-index: 9500;
         ">
+            <div id="pause-hint">点击下方箭头继续播放</div>
             <!-- 左后方箭头 -->
             <div class="arrow-group" style="position: absolute; left: 36%; top: 82%; display: flex; flex-direction: column; align-items: center;">
                 <button class="direction-arrow" data-direction="back-left" style="
