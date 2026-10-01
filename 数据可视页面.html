@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body {
@@ -824,7 +825,7 @@
             
             // 建筑派别数据
             const factionData = [
-                { name: '京派', frontImage: '京front.png', model: '北京四合院.glb', description: '四合院作为京派建筑的典型代表，其装饰元素承载着深厚的文化寓意，吉祥寓意、伦理教化、自然山水等主题体现了传统建筑的文化内涵。四合院屋顶类型多样，不同形式在功能属性上各具特色，体现了京派建筑的实用性与审美性的完美结合。' },
+                { name: '京派', frontImage: '京front.webp', model: '北京四合院.glb', description: '四合院作为京派建筑的典型代表，其装饰元素承载着深厚的文化寓意，吉祥寓意、伦理教化、自然山水等主题体现了传统建筑的文化内涵。四合院屋顶类型多样，不同形式在功能属性上各具特色，体现了京派建筑的实用性与审美性的完美结合。' },
                 { name: '粤派', frontImage: '粤front.png', model: '广东镬耳墙.glb', description: '粤派建筑装饰融合了世俗生活、封建礼制、海洋外来文化等多重元素，形成了独特的岭南艺术风格。建筑构造巧妙适应岭南湿热气候，体现了人与自然和谐共生的智慧。' },
                 { name: '徽派', frontImage: '徽front.png', model: '安徽马头墙.glb', description: '徽派民居以"白墙黛瓦"为标志性色彩特征，黑白相间的建筑色调营造出素雅宁静的视觉效果。马头墙、天井等核心建筑元素不仅具有实用功能，更承载着徽商文化的精神内涵。' },
                 { name: '苏派', frontImage: '苏front.png', model: '苏州庭院.glb', description: '苏派民居历经明代、清代早中期至清代晚期的发展演变，现存建筑以清代晚期为主，体现了江南水乡建筑的精湛技艺。园林元素与居住空间的完美融合，展现了苏派建筑"宅园一体"的独特魅力。' },
@@ -7366,7 +7367,7 @@
                 <div style="
                     width: 100%;
                     height: 100%;
-                    background-image: url('agent/ai背景.png');
+                    background-image: url('agent/ai背景.webp');
                     background-size: cover;
                     background-position: center;
                     border-radius: 8px;
@@ -7543,7 +7544,8 @@
             // ========== API 配置 ==========
             // 本地开发时使用：http://localhost:3000
             // 部署到 Zeabur 后改为：https://你的项目名.zeabur.app
-            const API_BASE_URL = 'https://gujian-project.zeabur.app';
+            // 同域部署：由 Nginx 将 /api 转发到本机 Node.js 后端
+            const API_BASE_URL = '';
             // ==============================
 
             // 对话历史数组（存储上下文）

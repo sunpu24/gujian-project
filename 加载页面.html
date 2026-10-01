@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body {
@@ -37,7 +38,7 @@
         /* ========== 加载页面样式 ========== */
         :root {
             /* 基础颜色 */
-            --loading-bg-image: url('加载背景.jpg'); 
+            --loading-bg-image: url('加载背景.webp');
             --loading-text-color: #ffffff;
             
             /* 加载动画颜色 */
@@ -321,7 +322,7 @@
             left: 0;
             width: 1527px;
             height: 740px;
-            background: url('加载背景.jpg');
+            background: url('加载背景.webp');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;

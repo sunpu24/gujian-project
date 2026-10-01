@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body { margin: 0; padding: 0; width: 1527px; height: 740px; overflow: hidden; background: #fff; }
@@ -150,7 +151,7 @@
         #main-container {
             /* 新增托底色：古风绢帛/旧纸张的颜色 */
             background-color: #d4c4a8; 
-            background-image: url('游戏地图_底图.jpg');
+            background-image: url('游戏地图_底图.webp');
             background-repeat: no-repeat;
             background-position: center center;
             /* 关键修复：改为 100% 100%，确保左右卷轴完全显示 */
@@ -313,7 +314,7 @@
 
         #map-layer {
             width: 2500px; height: 100%;
-            background-image: url('游戏地图_底图.jpg');
+            background-image: url('游戏地图_底图.webp');
             background-repeat: no-repeat;
             background-size: 100% 100%;
             position: absolute; top: 0; left: 0;
@@ -1238,8 +1239,8 @@
     <!-- 视频遮罩层 -->
     <div class="video-overlay" id="videoOverlay">
         <div class="video-container">
-            <video id="introVideo" autoplay muted playsinline>
-                <source src="游戏视频.mp4" type="video/mp4">
+            <video id="introVideo" autoplay muted playsinline preload="metadata" poster="加载背景.webp">
+                <source data-src="游戏视频.mp4" type="video/mp4">
             </video>
         </div>
     </div>
@@ -1486,7 +1487,7 @@
                 </div>
                 
                 <div class="building-container" data-building="福建土楼" style="top: 470px; left: 1834px;">
-                    <img src="闽icon.png" class="building-icon" alt="闽派·福建土楼">
+                    <img src="闽icon.webp" class="building-icon" alt="闽派·福建土楼">
                     <div class="bubble"></div><div class="building-label">闽派·福建土楼</div>
                 </div>
                 
@@ -1702,6 +1703,12 @@
             const videoOverlay = document.getElementById('videoOverlay');
             const introVideo = document.getElementById('introVideo');
             if (introVideo) {
+                const source = introVideo.querySelector('source[data-src]');
+                if (source) {
+                    source.src = source.dataset.src;
+                    introVideo.load();
+                    introVideo.play().catch(() => {});
+                }
                 introVideo.addEventListener('ended', function() { videoOverlay.style.display = 'none'; });
                 introVideo.addEventListener('error', function() { videoOverlay.style.display = 'none'; });
             }
@@ -2879,7 +2886,7 @@
                 <div style="
                     width: 100%;
                     height: 100%;
-                    background-image: url('agent/ai背景.png');
+                    background-image: url('agent/ai背景.webp');
                     background-size: cover;
                     background-position: center;
                     border-radius: 8px;
@@ -3064,7 +3071,8 @@
             // ========== API 配置 ==========
             // 本地开发时使用：http://localhost:3000
             // 部署到 Zeabur 后改为：https://你的项目名.zeabur.app
-            const API_BASE_URL = 'https://gujian-project.zeabur.app';
+            // 同域部署：由 Nginx 将 /api 转发到本机 Node.js 后端
+            const API_BASE_URL = '';
             // ==============================
 
             // 对话历史数组（存储上下文）

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body {
@@ -19,7 +20,7 @@
         body {
             margin: 0;
             padding: 0;
-            background: url('古今对比背景.jpg') center/cover no-repeat;
+            background: url('古今对比背景.webp') center/cover no-repeat;
            
             height: 740px;
             overflow: hidden;
@@ -1042,8 +1043,8 @@
                     <h3 id="videoTopTitle" style="color: white; text-align: center; margin-bottom: 20px; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);">2026.03.20 焦点访谈 | 修缮乱象</h3>
                     
                     <!-- 视频播放器 -->
-                    <video id="videoPlayer" width="90%" height="400" controls style="background-color: black; z-index: 10; position: relative; outline: none;">
-                        <source src="古今对比_焦点访谈.mp4" type="video/mp4">
+                    <video id="videoPlayer" width="90%" height="400" controls preload="none" poster="古今对比背景.webp" style="background-color: black; z-index: 10; position: relative; outline: none;">
+                        <source data-src="古今对比_焦点访谈.mp4" type="video/mp4">
                         您的浏览器不支持视频播放。
                     </video>
                     
@@ -2581,7 +2582,7 @@
                 <div style="
                     width: 100%;
                     height: 100%;
-                    background-image: url('agent/ai背景.png');
+                    background-image: url('agent/ai背景.webp');
                     background-size: cover;
                     background-position: center;
                     border-radius: 8px;
@@ -2765,7 +2766,8 @@
             
             // 聊天功能
             // ========== API 配置 ==========
-            const API_BASE_URL = 'https://gujian-project.zeabur.app';
+            // 同域部署：由 Nginx 将 /api 转发到本机 Node.js 后端
+            const API_BASE_URL = '';
             // ==============================
 
             // 对话历史数组（存储上下文）

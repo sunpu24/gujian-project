@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body {
@@ -1167,7 +1168,7 @@
                 <!-- 小程序展示卡片 (3*2) -->
                 <div class="card card-complete">
                     <div class="card-image-wrapper">
-                        <img src="小程序展示.jpg" alt="小程序展示" class="card-image">
+                        <img src="小程序展示.webp" alt="小程序展示" class="card-image">
                     </div>
                     <div class="card-content">
                         <h3 class="card-title">国风筑韵 · 小程序展示</h3>
@@ -1184,28 +1185,28 @@
                             <button class="carousel-arrow prev" onclick="prevSlide()">&#8249;</button>
                             <div class="carousel-track" id="carouselTrack">
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴京派.png" alt="珐琅冰箱贴京派">
+                                    <img src="小程序图片/珐琅冰箱贴京派.webp" alt="珐琅冰箱贴京派">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴京派光影.png" alt="珐琅冰箱贴京派光影">
+                                    <img src="小程序图片/珐琅冰箱贴京派光影.webp" alt="珐琅冰箱贴京派光影">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴徽派.png" alt="珐琅冰箱贴徽派">
+                                    <img src="小程序图片/珐琅冰箱贴徽派.webp" alt="珐琅冰箱贴徽派">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴徽派光影.png" alt="珐琅冰箱贴徽派光影">
+                                    <img src="小程序图片/珐琅冰箱贴徽派光影.webp" alt="珐琅冰箱贴徽派光影">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴苏派.png" alt="珐琅冰箱贴苏派">
+                                    <img src="小程序图片/珐琅冰箱贴苏派.webp" alt="珐琅冰箱贴苏派">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴苏派光影.png" alt="珐琅冰箱贴苏派光影">
+                                    <img src="小程序图片/珐琅冰箱贴苏派光影.webp" alt="珐琅冰箱贴苏派光影">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴闽派.png" alt="珐琅冰箱贴闽派">
+                                    <img src="小程序图片/珐琅冰箱贴闽派.webp" alt="珐琅冰箱贴闽派">
                                 </div>
                                 <div class="carousel-slide">
-                                    <img src="小程序图片/珐琅冰箱贴闽派光影.png" alt="珐琅冰箱贴闽派光影">
+                                    <img src="小程序图片/珐琅冰箱贴闽派光影.webp" alt="珐琅冰箱贴闽派光影">
                                 </div>
                             </div>
                             <button class="carousel-arrow next" onclick="nextSlide()">&#8250;</button>
@@ -1233,7 +1234,7 @@
                         <div class="newspaper-container">
                             <!-- 左侧报纸区域 -->
                             <div class="newspaper-section">
-                                <img src="收藏报纸.png?v=1" alt="收藏报纸" class="newspaper-image">
+                                <img src="收藏报纸.webp?v=1" alt="收藏报纸" class="newspaper-image">
                             </div>
                             
                             <!-- 右侧摄像头区域 -->
@@ -1363,8 +1364,8 @@
         <div id="videoModal" class="video-modal">
             <div class="video-modal-content">
                 <span class="video-close-btn" onclick="closeVideoModal()">&times;</span>
-                <video id="demoVideo" controls autoplay>
-                    <source src="小程序录屏.mp4" type="video/mp4">
+                <video id="demoVideo" controls preload="none" poster="小程序展示.webp">
+                    <source data-src="小程序录屏.mp4" type="video/mp4">
                 </video>
             </div>
         </div>
@@ -1609,6 +1610,11 @@
         if (modal && mask && video) {
             mask.style.display = 'block';
             modal.style.display = 'block';
+            const source = video.querySelector('source[data-src]');
+            if (source && !source.getAttribute('src')) {
+                source.src = source.dataset.src;
+                video.load();
+            }
             video.play().catch(err => console.log('视频自动播放失败:', err));
         }
     }

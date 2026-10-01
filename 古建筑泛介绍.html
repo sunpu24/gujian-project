@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>国风筑韵-古构</title>
@@ -192,7 +193,7 @@
       color: #3a2815;
       line-height: 1.7;
       overflow: auto;
-      background-image: url('泛介绍背景图.png');
+      background-image: url('泛介绍背景图.webp');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -283,19 +284,19 @@
     }
 
     .section-card:nth-child(1) {
-      background-image: url('ui_建筑结构.png');
+      background-image: url('ui_建筑结构.webp');
     }
 
     .section-card:nth-child(2) {
-      background-image: url('ui_建造工艺.png');
+      background-image: url('ui_建造工艺.webp');
     }
 
     .section-card:nth-child(3) {
-      background-image: url('ui_建造材料.png');
+      background-image: url('ui_建造材料.webp');
     }
 
     .section-card:nth-child(4) {
-      background-image: url('ui_建筑美学.png');
+      background-image: url('ui_建筑美学.webp');
     }
 
     .section-card::before {
@@ -994,7 +995,7 @@
       padding: 22px;
       border: none;
       border-radius: 14px;
-      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.jpg') center / cover no-repeat;
+      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.webp') center / cover no-repeat;
       overflow: hidden;
     }
 
@@ -1021,7 +1022,7 @@
       padding: 22px;
       border: none;
       border-radius: 14px;
-      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.jpg') center / cover no-repeat;
+      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.webp') center / cover no-repeat;
       overflow: hidden;
     }
 
@@ -1195,7 +1196,7 @@
       padding: 22px;
       border: none;
       border-radius: 14px;
-      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.jpg') center / cover no-repeat;
+      background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.webp') center / cover no-repeat;
       overflow: hidden;
     }
 
@@ -2816,8 +2817,7 @@
             <p class="desc-text">北京四合院、晋派大院木构架。</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/抬梁式构架"
+            <img data-src-base="详细介绍图片/抬梁式构架"
               data-src-fallbacks="抬梁式构架"
               alt="抬梁式构架示意图"
             />
@@ -2826,8 +2826,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/穿斗式构架"
+            <img data-src-base="详细介绍图片/穿斗式构架"
               data-src-fallbacks="穿斗式构架"
               alt="穿斗式构架示意图"
             />
@@ -2846,8 +2845,7 @@
             <p class="desc-text">西北窑洞、华北乡村民居、西南山地民居。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/土木混合构架.png"
+            <img src="详细介绍图片/土木混合构架.png"
               alt="土木混合构架示意图"
             />
           </div>
@@ -2855,8 +2853,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/干栏式构架"
+            <img data-src-base="详细介绍图片/干栏式构架"
               data-src-fallbacks="详细介绍图片/杆栏式构架,干栏式构架,杆栏式构架"
               alt="干栏式构架示意图"
             />
@@ -2880,8 +2877,7 @@
             <p><strong>代表：</strong>晋派大院高墙、北京四合院外墙、客家土楼外围墙。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/青砖石砌墙.png"
+            <img src="详细介绍图片/青砖石砌墙.webp"
               alt="青砖实砌墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2890,8 +2886,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              src="详细介绍图片/青砖空斗墙.png"
+            <img src="详细介绍图片/青砖空斗墙.webp"
               alt="青砖空斗墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2910,8 +2905,7 @@
             <p><strong>代表：</strong>福建土楼内墙、西北窑洞墙体、西南山地民居墙。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/夯土墙.png"
+            <img src="详细介绍图片/夯土墙.webp"
               alt="夯土墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2920,8 +2914,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              src="详细介绍图片/石砌墙.png"
+            <img src="详细介绍图片/石砌墙.webp"
               alt="石砌墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2940,8 +2933,7 @@
             <p><strong>代表：</strong>西南吊脚楼、江南农家、傣族竹楼内墙墙体结构部分。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/竹编抹灰墙.png"
+            <img src="详细介绍图片/竹编抹灰墙.webp"
               alt="竹编抹灰墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2950,7 +2942,7 @@
       </div>
     </section>
 
-    <section class="section" id="hexingoujian" style="position: relative; padding: 22px; border: none; border-radius: 14px; background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.jpg') center / cover no-repeat; overflow: hidden;">
+    <section class="section" id="hexingoujian" style="position: relative; padding: 22px; border: none; border-radius: 14px; background: linear-gradient(125deg, rgba(220, 240, 230, 0.9), rgba(180, 220, 200, 0.8)), url('背景.webp') center / cover no-repeat; overflow: hidden;">
       <h3 style="margin: 0 0 16px; color: #2d503a; font-size: 32px; line-height: 1.1; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);">核心构件</h3>
       
       <!-- 壹、竖向骨架 -->
@@ -2968,8 +2960,7 @@
             <p class="desc-text"><strong>应用部位：</strong>檐下、室内、山墙及转角处，是所有木构建筑必备的基础构件。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/柱.jpeg"
+            <img src="详细介绍图片/柱.jpeg"
               alt="柱示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -2992,8 +2983,7 @@
             <p class="desc-text"><strong>应用部位：</strong>柱顶之间，沿建筑进深方向布置，构成屋架主体。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/梁.jpeg"
+            <img src="详细介绍图片/梁.jpeg"
               alt="梁示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3002,8 +2992,7 @@
         
         <article class="gable-item reverse">
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/月梁.jpeg"
+            <img src="详细介绍图片/月梁.jpeg"
               alt="月梁示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3024,8 +3013,7 @@
             <p class="desc-text"><strong>应用部位：</strong>柱头上方、柱身之间，沿面阔方向布置，为框架稳定构件。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/枋.jpeg"
+            <img src="详细介绍图片/枋.jpeg"
               alt="枋示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3048,8 +3036,7 @@
             <p class="desc-text"><strong>应用部位：</strong>柱顶、额枋与屋檐之间，多用于宫殿、庙宇等高等级建筑。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/斗拱.jpeg"
+            <img src="详细介绍图片/斗拱.jpeg"
               alt="斗拱示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3058,8 +3045,7 @@
         
         <article class="gable-item reverse">
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/牛腿.jpeg"
+            <img src="详细介绍图片/牛腿.jpeg"
               alt="牛腿示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3088,8 +3074,7 @@
             <p class="desc-text"><strong>应用部位：</strong>梁架上方，沿建筑面阔方向平行布置。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/檩.jpeg"
+            <img src="详细介绍图片/檩.jpeg"
               alt="檩示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3098,8 +3083,7 @@
         
         <article class="gable-item reverse">
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/椽.jpeg"
+            <img src="详细介绍图片/椽.jpeg"
               alt="椽示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3128,8 +3112,7 @@
             <p class="desc-text"><strong>应用部位：</strong>各层梁架之上，脊部及金步位置均有使用。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/蜀柱.jpeg"
+            <img src="详细介绍图片/蜀柱.jpeg"
               alt="蜀柱示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3138,8 +3121,7 @@
         
         <article class="gable-item reverse">
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/叉手.jpeg"
+            <img src="详细介绍图片/叉手.jpeg"
               alt="叉手示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3168,8 +3150,7 @@
             <p class="desc-text"><strong>应用部位：</strong>立柱下端与台基接触面。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/柱础.png"
+            <img src="详细介绍图片/柱础.png"
               alt="柱础示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3178,8 +3159,7 @@
         
         <article class="gable-item reverse">
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/台基.jpeg"
+            <img src="详细介绍图片/台基.jpeg"
               alt="台基示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3208,8 +3188,7 @@
             <p class="desc-text"><strong>应用部位：</strong>柱、梁、枋、斗拱等所有木构件节点。</p>
           </div>
           <div class="gable-image" style="min-height: 320px; display: flex; align-items: center; justify-content: center;">
-            <img
-              src="详细介绍图片/榫卯111.jpeg"
+            <img src="详细介绍图片/榫卯111.jpeg"
               alt="榫卯示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3228,8 +3207,7 @@
             <p><strong>代表：</strong>徽派宏村、西递民居、江南部分民居山墙。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/马头墙.jpeg"
+            <img src="详细介绍图片/马头墙.jpeg"
               alt="马头墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3238,8 +3216,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              src="详细介绍图片/镬耳墙.jpeg"
+            <img src="详细介绍图片/镬耳墙.jpeg"
               alt="镬耳墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3258,8 +3235,7 @@
             <p><strong>代表：</strong>北京四合院、晋派大院、北方乡村民居山墙。</p>
           </div>
           <div class="gable-image">
-            <img
-              src="详细介绍图片/平直硬山墙.jpeg"
+            <img src="详细介绍图片/平直硬山墙.jpeg"
               alt="平直硬山墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3268,8 +3244,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              src="详细介绍图片/弧形山墙.jpeg"
+            <img src="详细介绍图片/弧形山墙.jpeg"
               alt="弧形山墙示意图"
               style="width: auto; height: auto; max-width: 100%; max-height: 320px; object-fit: contain;"
             />
@@ -3293,8 +3268,7 @@
             <p><strong>代表：</strong>北京四合院、晋派民居、江南普通民居屋顶。</p>
           </div>
           <div class="roof-image">
-            <img
-              data-src-base="详细介绍图片/硬山顶"
+            <img data-src-base="详细介绍图片/硬山顶"
               data-src-fallbacks="详细介绍图片/硬山墙"
               alt="硬山顶示意图"
             />
@@ -3303,8 +3277,7 @@
 
         <article class="roof-item reverse">
           <div class="roof-image">
-            <img
-              data-src-base="详细介绍图片/悬山顶"
+            <img data-src-base="详细介绍图片/悬山顶"
               data-src-fallbacks="悬山顶,悬山顶示意图"
               alt="悬山顶示意图"
             />
@@ -3323,8 +3296,7 @@
             <p><strong>代表：</strong>江南民居厢房、岭南民居厅堂、部分徽派民居。</p>
           </div>
           <div class="roof-image">
-            <img
-              data-src-base="详细介绍图片/卷棚顶"
+            <img data-src-base="详细介绍图片/卷棚顶"
               data-src-fallbacks="卷棚顶示意图"
               alt="卷棚顶示意图"
             />
@@ -3333,8 +3305,7 @@
 
         <article class="roof-item reverse">
           <div class="roof-image">
-            <img
-              data-src-base="详细介绍图片/攒尖顶"
+            <img data-src-base="详细介绍图片/攒尖顶"
               data-src-fallbacks="攒尖顶示意图"
               alt="攒尖顶示意图"
             />
@@ -3353,8 +3324,7 @@
             <p><strong>代表：</strong>徽派宗祠享堂、闽派闽南大厝宗祠、江南园林主厅。</p>
           </div>
           <div class="roof-image">
-            <img
-              data-src-base="详细介绍图片/歇山顶"
+            <img data-src-base="详细介绍图片/歇山顶"
               data-src-fallbacks="歇山顶示意图"
               alt="歇山顶示意图"
             />
@@ -3433,8 +3403,7 @@
             <p class="desc-text"><br><br>&nbsp;&nbsp;代表：北京四合院、晋派大院、北方乡村合院、曲阜孔府前院</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/合院式布局"
+            <img data-src-base="详细介绍图片/合院式布局"
               data-src-fallbacks="单轴线对称_山西王家大院,十字对称_潮汕四点金"
               alt="合院式布局示意图"
             />
@@ -3443,8 +3412,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/天井式布局"
+            <img data-src-base="详细介绍图片/天井式布局"
               data-src-fallbacks="天井式布局"
               alt="天井式布局示意图"
             />
@@ -3463,8 +3431,7 @@
             <p class="desc-text"><br><br>&nbsp;&nbsp;代表：福建土楼、粤派围龙屋、客家围楼、梅州四角楼、龙岩圆楼</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/环形围合布局"
+            <img data-src-base="详细介绍图片/环形围合布局"
               data-src-fallbacks="环形围合布局"
               alt="环形围合布局示意图"
             />
@@ -3473,8 +3440,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/山地自由布局"
+            <img data-src-base="详细介绍图片/山地自由布局"
               data-src-fallbacks="山地自由布局,山地自由式布局"
               alt="山地自由布局示意图"
             />
@@ -3493,8 +3459,7 @@
             <p class="desc-text"><br><br>&nbsp;&nbsp;代表：陕北靠崖窑、豫西地坑院、陇东窑洞、黄土高原崖居、山西土窑</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/窑洞式布局"
+            <img data-src-base="详细介绍图片/窑洞式布局"
               data-src-fallbacks="陕北窑洞布局"
               alt="窑洞式布局示意图"
             />
@@ -3503,8 +3468,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/干栏式布局"
+            <img data-src-base="详细介绍图片/干栏式布局"
               data-src-fallbacks="干栏式布局"
               alt="干栏式布局示意图"
             />
@@ -3523,8 +3487,7 @@
             <p class="desc-text"><br><br>&nbsp;&nbsp;代表：晋商大院（王家大院、乔家大院）、曲阜孔府民居、苏州拙政园住宅部分、扬州何园宅院群</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/多进多路并联合院"
+            <img data-src-base="详细介绍图片/多进多路并联合院"
               data-src-fallbacks="单轴线对称_山西王家大院"
               alt="多进多路并联合院示意图"
             />
@@ -3533,8 +3496,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/水乡枕水布局"
+            <img data-src-base="详细介绍图片/水乡枕水布局"
               data-src-fallbacks="水乡枕水布局"
               alt="水乡枕水布局示意图"
             />
@@ -3553,8 +3515,7 @@
             <p class="desc-text"><br><br>&nbsp;&nbsp;代表：藏族碉房、广东开平碉楼、羌族石楼、川西碉房、福建土楼碉楼</p>
           </div>
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/碉楼式布局"
+            <img data-src-base="详细介绍图片/碉楼式布局"
               data-src-fallbacks="碉楼式布局"
               alt="碉房 / 碉楼式布局示意图"
             />
@@ -3563,8 +3524,7 @@
 
         <article class="gable-item reverse">
           <div class="gable-image">
-            <img
-              data-src-base="详细介绍图片/一字排开_联排式民居"
+            <img data-src-base="详细介绍图片/一字排开_联排式民居"
               data-src-fallbacks="江南民居_南方变体"
               alt="一字排开 / 联排式民居示意图"
             />
@@ -3983,7 +3943,7 @@
             <div style="margin-top:18px; text-align:center;">
               <div style="width: 220px; height: 140px; margin: 0 auto;">
                 <div class="image-container">
-                  <img src="详细介绍图片/漏窗.jpeg" alt="漏窗" title="漏窗">
+                  <img src="详细介绍图片/漏窗.webp" alt="漏窗" title="漏窗">
                 </div>
               </div>
             </div>
@@ -4260,7 +4220,7 @@
             <div style="margin-top:18px; text-align:center;">
               <div style="width: 220px; height: 140px; margin: 0 auto;">
                 <div class="image-container">
-                  <img src="详细介绍图片/垂花门.jpeg" alt="垂花门" title="垂花门">
+                  <img src="详细介绍图片/垂花门.webp" alt="垂花门" title="垂花门">
                 </div>
               </div>
             </div>
@@ -5975,7 +5935,7 @@
         document.getElementById('colorIntroPanel'),
         document.getElementById('caissonIntroPanel'),
       ].filter(Boolean);
-      const EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+      const EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'gif'];
       const materialPanel = document.getElementById('buildingMaterialPanel');
       const materialFilterDrawer = document.getElementById('materialFilterDrawer');
       const materialFilterToggle = document.getElementById('materialFilterToggle');
@@ -7051,7 +7011,7 @@
             {
               term: '卷草纹础',
               desc: '雕刻卷草、祥云等连续纹样，装饰性强。适配江南、岭南湿润地区，减少雨水积聚。',
-              image: '详细介绍图片/卷草纹础.png',
+              image: '详细介绍图片/卷草纹础.webp',
             },
           ],
         };
@@ -7861,7 +7821,7 @@
             <div style="
                 width: 100%;
                 height: 100%;
-                background-image: url('agent/ai背景.png');
+                background-image: url('agent/ai背景.webp');
                 background-size: cover;
                 background-position: center;
                 border-radius: 8px;
@@ -8012,7 +7972,8 @@
         // ========== API 配置 ==========
         // 本地开发时使用：http://localhost:3000
         // 部署到 Zeabur 后改为：https://你的项目名.zeabur.app
-        const API_BASE_URL = 'https://gujian-project.zeabur.app';
+        // 同域部署：由 Nginx 将 /api 转发到本机 Node.js 后端
+        const API_BASE_URL = '';
         // ==============================
 
         // 对话历史数组（存储上下文）
@@ -8342,12 +8303,12 @@
                             padding: 10px;
                             position: relative;
                         ">
-                            <img src="详细介绍图片/藻井AR.png" alt="藻井AR" style="
+                            <img src="详细介绍图片/藻井AR.webp" alt="藻井AR" style="
                                 width: 100%;
                                 height: 100%;
                                 object-fit: contain;
                             ">
-                            <button onclick="downloadImage('详细介绍图片/藻井AR.png', '藻井AR')" style="
+                            <button onclick="downloadImage('详细介绍图片/藻井AR.webp', '藻井AR')" style="
                                 position: absolute;
                                 top: 5px;
                                 right: 5px;
@@ -8390,7 +8351,7 @@
             
             // 鼠标悬停显示下载按钮
             const imgContainers = modalContent.querySelectorAll('div[style*="position: relative"]');
-            const downloadUrls = ['详细介绍图片/AR二维码.png', '详细介绍图片/藻井AR.png'];
+            const downloadUrls = ['详细介绍图片/AR二维码.png', '详细介绍图片/藻井AR.webp'];
             const downloadNames = ['AR二维码', '藻井AR'];
             imgContainers.forEach((container, index) => {
                 const downloadBtn = container.querySelector('button');

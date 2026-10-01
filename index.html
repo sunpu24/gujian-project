@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+        <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=1527, user-scalable=yes">
     <style>
       html, body {
@@ -556,8 +557,8 @@
         </div>
         
         <!-- 视频元素 -->
-        <video id="intro-video" autoplay muted playsinline>
-            <source src="intro-video.mp4" type="video/mp4">
+        <video id="intro-video" autoplay muted playsinline preload="metadata" poster="加载背景.webp">
+            <source data-src="intro-video.mp4" type="video/mp4">
         </video>
         
         <!-- 方向箭头按钮容器 -->
@@ -723,7 +724,7 @@
                 <p>所展示为故宫万春亭藻井，明代嘉靖年间所造，上圆下方，以榫卯斗拱层层叠筑，正中是贴金盘龙，龙口衔珠。它以龙凤、牡丹、星宿纹样装饰，金碧辉煌，暗合"天圆地方"的传统宇宙观。</p>
                 <button id="jump-to-caisson" style="margin-top: 15px; padding: 8px 16px; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 4px; color: white; font-size: 14px; cursor: pointer; transition: all 0.3s ease;">跳转介绍</button>
             </div>
-            <img id="title-image" src="大字标题.jpg" alt="大字标题">
+            <img id="title-image" src="大字标题.jpg" alt="大字标题" loading="eager" fetchpriority="high">
             <h2 id="subtitle">——以古建筑中民居为主的数字化可视平台</h2>
             <button id="start-btn">启章</button>
         </div>
@@ -1263,7 +1264,7 @@
                 <div style="
                     width: 100%;
                     height: 100%;
-                    background-image: url('agent/ai背景.png');
+                    background-image: url('agent/ai背景.webp');
                     background-size: cover;
                     background-position: center;
                     border-radius: 8px;
@@ -1401,7 +1402,8 @@
             // ========== API 配置 ==========
             // 本地开发时使用：http://localhost:3000
             // 部署到 Zeabur 后改为：https://你的项目名.zeabur.app
-            const API_BASE_URL = 'https://gujian-project.zeabur.app';
+            // 同域部署：由 Nginx 将 /api 转发到本机 Node.js 后端
+            const API_BASE_URL = '';
             // ==============================
 
             // 对话历史数组（存储上下文）
