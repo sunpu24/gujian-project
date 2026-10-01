@@ -1,0 +1,19 @@
+{
+  "name": "gujian-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "中国古建筑可视化网站与古建灵犀 API",
+  "main": "gujian-backend/server.js",
+  "scripts": {
+    "start": "node gujian-backend/server.js"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "openai": "^6.34.0"
+  }
+}

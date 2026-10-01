@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -11,10 +12,12 @@ app.use(cors());
 app.use(express.json());
 
 // DeepSeek API 配置
-const client = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com"
-});
+const client = process.env.DEEPSEEK_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: "https://api.deepseek.com"
+    })
+  : null;
 
 // System Prompt - 古建灵犀的人设
 const SYSTEM_PROMPT = `你是「古建灵犀」，一位资深的中国传统古建筑学专家，也是"国风筑韵（古建筑可视化）"网站的专属智能向导。你精通中国历代建筑风格（京派、徽派、苏派等）、木构架体系（如榫卯、斗拱、藻井）、营造法式以及建筑背后的历史文化。
@@ -38,6 +41,12 @@ const SYSTEM_PROMPT = `你是「古建灵犀」，一位资深的中国传统古
 // POST /api/chat 接口
 app.post('/api/chat', async (req, res) => {
   try {
+    if (!client) {
+      return res.status(503).json({
+        reply: "古建灵犀尚未配置完成，请稍后再试。"
+      });
+    }
+
     const { messages } = req.body;
     
     if (!messages || !Array.isArray(messages)) {
@@ -69,6 +78,30 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 });
+
+// Zeabur 使用同一个服务提供前端页面和 API。
+// API 路由需要放在静态文件中间件之前，避免被前端资源处理覆盖。
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+const frontendRoot = path.resolve(__dirname, '..');
+
+// 后端源码不作为静态资源对外提供。
+app.use('/gujian-backend', (req, res) => {
+  res.sendStatus(404);
+});
+
+app.use(express.static(frontendRoot, {
+  dotfiles: 'ignore',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+    }
+  }
+}));
 
 // 启动服务器
 app.listen(PORT, '0.0.0.0', () => {
