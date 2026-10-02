@@ -1639,7 +1639,19 @@
             
             let currentTranslateX = 0; 
             let targetTranslateX = 0;  
-            const maxTranslateX = 2500 - 1527; 
+            let maxTranslateX = 0;
+
+            function updateMapBounds() {
+                maxTranslateX = Math.max(0, mapLayer.offsetWidth - mapViewport.clientWidth);
+                targetTranslateX = Math.max(-maxTranslateX, Math.min(0, targetTranslateX));
+                currentTranslateX = Math.max(-maxTranslateX, Math.min(0, currentTranslateX));
+            }
+
+            updateMapBounds();
+            window.addEventListener('resize', updateMapBounds);
+            window.addEventListener('orientationchange', function () {
+                setTimeout(updateMapBounds, 250);
+            });
             
             let startMouseX = 0;
             let startTranslateX = 0;
@@ -1673,26 +1685,45 @@
             }
             requestAnimationFrame(animateMap); 
 
-            mapViewport.addEventListener('mousedown', (e) => {
+            let activePointerId = null;
+
+            mapViewport.addEventListener('pointerdown', (e) => {
                 if (e.target.closest('.building-container') || e.target.closest('.trigger-box') || e.target.closest('#top-nav') || e.target.closest('.floating-ball')) return;
+                if (!e.isPrimary) return;
                 isDraggingMap = true;
+                activePointerId = e.pointerId;
                 mapViewport.style.cursor = 'grabbing';
                 startMouseX = e.clientX;
                 startTranslateX = targetTranslateX;
+                if (mapViewport.setPointerCapture) {
+                    try {
+                        mapViewport.setPointerCapture(e.pointerId);
+                    } catch (error) {
+                        // Some embedded browsers expose Pointer Events without
+                        // pointer capture; dragging still works without it.
+                    }
+                }
             });
 
-            window.addEventListener('mousemove', (e) => {
-                if (!isDraggingMap) return;
+            mapViewport.addEventListener('pointermove', (e) => {
+                if (!isDraggingMap || e.pointerId !== activePointerId) return;
                 const dx = e.clientX - startMouseX;
+                if (Math.abs(dx) > 4 && e.cancelable) e.preventDefault();
                 targetTranslateX = startTranslateX + dx;
                 if (targetTranslateX > 0) targetTranslateX = 0;
                 if (targetTranslateX < -maxTranslateX) targetTranslateX = -maxTranslateX;
             });
 
-            window.addEventListener('mouseup', () => {
+            function finishMapDrag(e) {
+                if (e && activePointerId !== null && e.pointerId !== activePointerId) return;
                 isDraggingMap = false;
+                activePointerId = null;
                 mapViewport.style.cursor = 'grab';
-            });
+            }
+
+            mapViewport.addEventListener('pointerup', finishMapDrag);
+            mapViewport.addEventListener('pointercancel', finishMapDrag);
+            mapViewport.addEventListener('lostpointercapture', finishMapDrag);
 
             mapViewport.addEventListener('wheel', (e) => {
                 e.preventDefault();

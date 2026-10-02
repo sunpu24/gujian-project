@@ -2316,7 +2316,10 @@
         
         // 响应式处理
         window.addEventListener('resize', function() {
-            charts[currentChartIndex].resize();
+            const activeChart = charts[currentChartIndex];
+            if (activeChart && typeof activeChart.resize === 'function') {
+                activeChart.resize();
+            }
         });
         
         // 页面加载完成后处理URL参数
