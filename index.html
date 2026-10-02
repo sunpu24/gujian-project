@@ -605,7 +605,7 @@
             pointer-events: none;
             z-index: 9500;
         ">
-            <div id="pause-hint">点击下方箭头继续播放</div>
+            <div id="pause-hint">可点击箭头前往对应页面</div>
             <!-- 左后方箭头 -->
             <div class="arrow-group" style="position: absolute; left: 36%; top: 82%; display: flex; flex-direction: column; align-items: center;">
                 <button class="direction-arrow" data-direction="back-left" style="
@@ -930,13 +930,12 @@
             
             
             // 视频时间更新事件 - 所有视频都支持箭头导向
-            let hasPausedAt1s = false;
+            let hasShownArrowsAt1s = false;
             let hasClickedFrontArrow = false; // 记录是否点击过指向用户的箭头
             introVideo.addEventListener('timeupdate', () => {
-                // 三个视频都在1秒处显示箭头导向（未暂停过且未点击过指向用户的箭头）
-                if (!hasPausedAt1s && !hasClickedFrontArrow && introVideo.currentTime >= 1) {
-                    introVideo.pause();
-                    hasPausedAt1s = true;
+                // 视频继续播放，播放到1秒后显示导航箭头，避免首页画面停住看起来像动画失效。
+                if (!hasShownArrowsAt1s && !hasClickedFrontArrow && introVideo.currentTime >= 1) {
+                    hasShownArrowsAt1s = true;
                     
                     // 应用当前视频的箭头位置配置
                     applyArrowPositions();
@@ -1011,7 +1010,7 @@
                             directionArrows.style.display = 'none';
                             // 继续播放视频
                             introVideo.play();
-                            hasPausedAt1s = false;
+                            hasShownArrowsAt1s = false;
                             hasClickedFrontArrow = true; // 标记已点击过，本次会话不再显示箭头
                             break;
                     }
@@ -1030,7 +1029,7 @@
                     currentVideo = videoPath;
                     
                     // 重置暂停标记（每次切换视频都重置）
-                    hasPausedAt1s = false;
+                    hasShownArrowsAt1s = false;
                     hasClickedFrontArrow = false; // 同时重置点击标记
                     
                     // 隐藏方向箭头
@@ -1275,8 +1274,8 @@
                 position: fixed;
                 top: 0;
                 left: 0;
-                width: 1527px;
-                height: 740px;
+                width: 100vw;
+                height: 100dvh;
                 background: rgba(0, 0, 0, 0.7);
                 display: block;
                 z-index: 10001;
@@ -1286,10 +1285,11 @@
             const chatWrapper = document.createElement('div');
             chatWrapper.style.cssText = `
                 position: absolute;
-                left: 313px;
-                top: 120px;
-                width: 900px;
-                height: 500px;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: min(900px, calc(100vw - 32px));
+                height: min(500px, calc(100dvh - 32px));
             `;
             
             // 创建聊天内容

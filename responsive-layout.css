@@ -66,6 +66,30 @@ body {
   max-height: none !important;
 }
 
+#ai-chat-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Chat dialogs are created by page scripts with legacy fixed coordinates.
+   Re-center the generated panel against the current viewport as well. */
+#ai-chat-modal > div,
+.chat-wrapper {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(900px, calc(100vw - 32px)) !important;
+  height: min(500px, calc(100dvh - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: calc(100dvh - 32px) !important;
+}
+
 #direction-arrows,
 #start-container {
   width: 100% !important;

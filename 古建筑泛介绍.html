@@ -7811,10 +7811,11 @@
         const chatWrapper = document.createElement('div');
         chatWrapper.style.cssText = `
             position: absolute;
-            left: 313px;
-            top: 120px;
-            width: 900px;
-            height: 500px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(900px, calc(100vw - 32px));
+            height: min(500px, calc(100dvh - 32px));
         `;
         
         // 创建聊天内容
