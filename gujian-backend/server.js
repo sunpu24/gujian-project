@@ -99,6 +99,13 @@ app.use('/gujian-backend', (req, res) => {
 // 进行流式 gzip，可在不改变文件内容的情况下显著减少首次下载量。
 // 带 Range 的请求（尤其视频）仍交给 express.static，保留断点和分段加载。
 const gzipExtensions = new Set(['.html', '.css', '.js', '.json', '.glb']);
+const compressedContentTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.glb': 'model/gltf-binary'
+};
 app.get(/\.(?:html|css|js|json|glb)$/i, (req, res, next) => {
   if (req.headers.range || !/\bgzip\b/i.test(req.headers['accept-encoding'] || '')) {
     return next();
@@ -113,33 +120,42 @@ app.get(/\.(?:html|css|js|json|glb)$/i, (req, res, next) => {
 
   const filePath = path.resolve(frontendRoot, `.${pathname}`);
   const rootPrefix = frontendRoot.endsWith(path.sep) ? frontendRoot : `${frontendRoot}${path.sep}`;
-  if (!filePath.startsWith(rootPrefix) || !gzipExtensions.has(path.extname(filePath).toLowerCase())) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (!filePath.startsWith(rootPrefix) || !gzipExtensions.has(extension)) {
     return next();
   }
 
   fs.stat(filePath, (statError, stats) => {
     if (statError || !stats.isFile()) return next();
 
-    const isHtml = path.extname(filePath).toLowerCase() === '.html';
-    const etag = `W/\"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}\"`;
-    res.type(filePath);
-    res.setHeader('Cache-Control', isHtml ? 'no-cache' : 'public, max-age=604800');
-    res.setHeader('Content-Encoding', 'gzip');
-    res.setHeader('Vary', 'Accept-Encoding');
-    res.setHeader('ETag', etag);
-    res.setHeader('Last-Modified', stats.mtime.toUTCString());
+    try {
+      const isHtml = extension === '.html';
+      const etag = `W/\"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}\"`;
 
-    if (req.fresh) return res.status(304).end();
-    if (req.method === 'HEAD') return res.end();
+      // Do not pass an absolute file path to res.type(). On Linux it contains
+      // slashes, so Express mistakes the path itself for a MIME value; Chinese
+      // filenames then cause ERR_INVALID_CHAR and terminate the Node process.
+      res.setHeader('Content-Type', compressedContentTypes[extension]);
+      res.setHeader('Cache-Control', isHtml ? 'no-cache' : 'public, max-age=604800');
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.setHeader('ETag', etag);
+      res.setHeader('Last-Modified', stats.mtime.toUTCString());
 
-    pipeline(
-      fs.createReadStream(filePath),
-      zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }),
-      res,
-      (error) => {
-        if (error && !res.headersSent) next(error);
-      }
-    );
+      if (req.fresh) return res.status(304).end();
+      if (req.method === 'HEAD') return res.end();
+
+      pipeline(
+        fs.createReadStream(filePath),
+        zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }),
+        res,
+        (error) => {
+          if (error && !res.headersSent) next(error);
+        }
+      );
+    } catch (error) {
+      next(error);
+    }
   });
 });
 
