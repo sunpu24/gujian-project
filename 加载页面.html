@@ -15,9 +15,6 @@
     </style>
     <meta charset="UTF-8">
     <title>国风筑韵-启卷</title>
-    <!-- 预加载MediaPipe模型 -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         /* ========== 基础样式 ========== */
         * {
@@ -748,38 +745,8 @@
             let progress = 0;
             const maxProgress = 100;
             
-            // 预加载MediaPipe模型
-            function preloadMediaPipeModels() {
-                return new Promise((resolve) => {
-                    if (typeof Hands !== 'undefined') {
-                        // 创建Hands实例，触发模型下载
-                        const hands = new Hands({
-                            locateFile: (file) => {
-                                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                            }
-                        });
-                        
-                        // 设置基本配置
-                        hands.setOptions({
-                            maxNumHands: 1,
-                            modelComplexity: 0,
-                            minDetectionConfidence: 0.5,
-                            minTrackingConfidence: 0.4
-                        });
-                        
-                        // 模型加载完成
-                        console.log('MediaPipe模型预加载完成');
-                        resolve();
-                    } else {
-                        // 如果Hands未定义，延迟后重试
-                        setTimeout(resolve, 100);
-                    }
-                });
-            }
-            
-            
             // 加载进度更新函数
-            async function updateProgress() {
+            function updateProgress() {
                 // 随机增加进度，模拟真实加载
                 progress += Math.random() * 15;
                 if (progress > maxProgress) {
@@ -796,8 +763,7 @@
                     loadingText.textContent = '正在加载卡牌资源...';
                 } else if (progress < 90) {
                     loadingText.textContent = '正在准备摄像头...';
-                    // 在这个阶段预加载MediaPipe模型
-                    await preloadMediaPipeModels();
+                    // 手势模型在真正进入抽卡页面时再初始化，避免加载页被第三方模型阻塞。
                 } else {
                     loadingText.textContent = '加载完成';
                 }

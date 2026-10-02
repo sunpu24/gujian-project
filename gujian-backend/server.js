@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
 const path = require('path');
+const fs = require('fs');
+const zlib = require('zlib');
+const { pipeline } = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -90,6 +93,54 @@ const frontendRoot = path.resolve(__dirname, '..');
 // 后端源码不作为静态资源对外提供。
 app.use('/gujian-backend', (req, res) => {
   res.sendStatus(404);
+});
+
+// Zeabur 当前不会自动压缩这些静态文件。对文本、JSON 和大型 GLB 模型
+// 进行流式 gzip，可在不改变文件内容的情况下显著减少首次下载量。
+// 带 Range 的请求（尤其视频）仍交给 express.static，保留断点和分段加载。
+const gzipExtensions = new Set(['.html', '.css', '.js', '.json', '.glb']);
+app.get(/\.(?:html|css|js|json|glb)$/i, (req, res, next) => {
+  if (req.headers.range || !/\bgzip\b/i.test(req.headers['accept-encoding'] || '')) {
+    return next();
+  }
+
+  let pathname;
+  try {
+    pathname = decodeURIComponent(req.path);
+  } catch {
+    return next();
+  }
+
+  const filePath = path.resolve(frontendRoot, `.${pathname}`);
+  const rootPrefix = frontendRoot.endsWith(path.sep) ? frontendRoot : `${frontendRoot}${path.sep}`;
+  if (!filePath.startsWith(rootPrefix) || !gzipExtensions.has(path.extname(filePath).toLowerCase())) {
+    return next();
+  }
+
+  fs.stat(filePath, (statError, stats) => {
+    if (statError || !stats.isFile()) return next();
+
+    const isHtml = path.extname(filePath).toLowerCase() === '.html';
+    const etag = `W/\"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}\"`;
+    res.type(filePath);
+    res.setHeader('Cache-Control', isHtml ? 'no-cache' : 'public, max-age=604800');
+    res.setHeader('Content-Encoding', 'gzip');
+    res.setHeader('Vary', 'Accept-Encoding');
+    res.setHeader('ETag', etag);
+    res.setHeader('Last-Modified', stats.mtime.toUTCString());
+
+    if (req.fresh) return res.status(304).end();
+    if (req.method === 'HEAD') return res.end();
+
+    pipeline(
+      fs.createReadStream(filePath),
+      zlib.createGzip({ level: zlib.constants.Z_BEST_SPEED }),
+      res,
+      (error) => {
+        if (error && !res.headersSent) next(error);
+      }
+    );
+  });
 });
 
 app.use(express.static(frontendRoot, {

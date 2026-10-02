@@ -4,6 +4,28 @@
         <script src="asset-loading.js" defer></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="stylesheet" href="responsive-layout.css">
+    <link rel="preload" href="加载背景.webp" as="image" type="image/webp" fetchpriority="high">
+    <script>
+      // Preload only the opening video that will actually be selected. This
+      // avoids downloading one 25MB video and immediately replacing it with
+      // another video from the visit rotation.
+      (function () {
+        try {
+          const videos = ['intro-video.mp4', 'intro_video3.mp4', 'intro_video2.mp4'];
+          const requested = new URLSearchParams(location.search).get('video');
+          const visits = parseInt(localStorage.getItem('videoVisitCount') || '0', 10) || 0;
+          const selected = requested ? (videos.includes(requested) ? requested : 'intro-video.mp4') : videos[visits % videos.length];
+          const preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'video';
+          preload.type = 'video/mp4';
+          preload.href = `${selected}?v=20261002`;
+          document.head.appendChild(preload);
+        } catch (error) {
+          // Private browsing or restricted storage should not block the page.
+        }
+      })();
+    </script>
     <style>
       html, body {
         margin: 0;
@@ -53,7 +75,28 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            background: #111 url('加载背景.webp') center / cover no-repeat;
         }
+
+        #video-loading-status {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            padding: 10px 18px;
+            border: 1px solid rgba(255, 255, 255, .35);
+            border-radius: 999px;
+            background: rgba(0, 0, 0, .42);
+            color: #fff;
+            font-size: clamp(13px, 1.3vw, 17px);
+            letter-spacing: 1px;
+            text-shadow: 0 1px 4px #000;
+            pointer-events: none;
+            transition: opacity .25s ease;
+        }
+
+        #video-loading-status.hidden { opacity: 0; }
         
         /* 视频选择器 */
         #video-selector {
@@ -588,9 +631,27 @@
         </div>
         
         <!-- 视频元素 -->
-        <video id="intro-video" autoplay muted playsinline preload="metadata" poster="加载背景.webp">
+        <video id="intro-video" autoplay muted playsinline preload="auto" poster="加载背景.webp">
             <source data-src="intro-video.mp4" type="video/mp4">
         </video>
+        <script>
+            // Choose the opening scene before the browser starts buffering the
+            // video, so returning visitors do not download the wrong 25MB file.
+            (function () {
+                try {
+                    const videos = ['intro-video.mp4', 'intro_video3.mp4', 'intro_video2.mp4'];
+                    const requested = new URLSearchParams(location.search).get('video');
+                    const visits = parseInt(localStorage.getItem('videoVisitCount') || '0', 10) || 0;
+                    const selected = videos.includes(requested) ? requested : videos[visits % videos.length];
+                    const source = document.querySelector('#intro-video source');
+                    if (source) source.src = `${selected}?v=20261002`;
+                } catch (error) {
+                    const source = document.querySelector('#intro-video source');
+                    if (source) source.src = 'intro-video.mp4?v=20261002';
+                }
+            })();
+        </script>
+        <div id="video-loading-status">正在加载开场动画…</div>
         
         <!-- 方向箭头按钮容器 -->
         <div id="direction-arrows" style="
@@ -773,9 +834,32 @@
             const videoButtons = document.querySelectorAll('.video-btn');
             const infoIcon = document.getElementById('info-icon');
             const infoBox = document.getElementById('info-box');
+            const videoLoadingStatus = document.getElementById('video-loading-status');
             
             // 视频列表，按顺序循环播放
             const videoList = ['intro-video.mp4', 'intro_video3.mp4', 'intro_video2.mp4'];
+
+            function setVideoLoading(message) {
+                if (!videoLoadingStatus) return;
+                videoLoadingStatus.textContent = message || '';
+                videoLoadingStatus.classList.toggle('hidden', !message);
+            }
+
+            function startIntroPlayback() {
+                const playPromise = introVideo.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(() => setVideoLoading('点击页面开始播放开场动画'));
+                }
+            }
+
+            introVideo.addEventListener('loadeddata', () => setVideoLoading(''));
+            introVideo.addEventListener('playing', () => setVideoLoading(''));
+            introVideo.addEventListener('waiting', () => setVideoLoading('正在缓冲开场动画…'));
+            introVideo.addEventListener('stalled', () => setVideoLoading('网络较慢，正在继续加载…'));
+            introVideo.addEventListener('error', () => setVideoLoading('开场动画加载失败，请刷新重试'));
+            document.addEventListener('click', () => {
+                if (introVideo.paused && !introVideo.ended) startIntroPlayback();
+            }, { once: true });
             
             // 为每个视频配置箭头位置
             const arrowPositionConfig = {
@@ -799,8 +883,9 @@
                 }
             };
             
-            // 跟踪当前选择的视频
-            let currentVideo = 'intro-video.mp4';
+            // 跟踪当前选择的视频。首屏上方的内联脚本已经提前设置了 source，
+            // 这里沿用它，避免初始化时再次 load() 导致慢网下的下载被打断。
+            let currentVideo = (introVideo.querySelector('source')?.getAttribute('src') || 'intro-video.mp4').split('?')[0];
             
             // 获取并更新访问次数，实现循环播放
             function getNextVideo() {
@@ -823,23 +908,23 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 const videoParam = urlParams.get('video');
                 if (videoParam) {
-                    currentVideo = videoParam;
-                    // 找到对应的按钮并点击
-                    videoButtons.forEach(button => {
-                        if (button.getAttribute('data-video') === videoParam) {
-                            button.click();
-                        }
-                    });
+                    const requested = videoList.includes(videoParam) ? videoParam : 'intro-video.mp4';
+                    currentVideo = requested;
+                    setActiveVideoButton(requested);
                 } else {
                     // 如果没有URL参数，使用localStorage循环播放
                     const nextVideo = getNextVideo();
-                    // 找到对应的按钮并点击
-                    videoButtons.forEach(button => {
-                        if (button.getAttribute('data-video') === nextVideo) {
-                            button.click();
-                        }
-                    });
+                    // 上方内联脚本已用相同的访问次数选好了 source；只更新界面状态，
+                    // 不再次 load()，避免大视频被重复请求。
+                    currentVideo = nextVideo;
+                    setActiveVideoButton(nextVideo);
                 }
+            }
+
+            function setActiveVideoButton(videoPath) {
+                videoButtons.forEach(button => {
+                    button.classList.toggle('active', button.getAttribute('data-video') === videoPath);
+                });
             }
             
             // 视频结束事件处理
@@ -1009,7 +1094,7 @@
                             // 隐藏方向箭头
                             directionArrows.style.display = 'none';
                             // 继续播放视频
-                            introVideo.play();
+                            startIntroPlayback();
                             hasShownArrowsAt1s = false;
                             hasClickedFrontArrow = true; // 标记已点击过，本次会话不再显示箭头
                             break;
@@ -1037,12 +1122,12 @@
                     
                     // 更新视频源
                     const source = introVideo.querySelector('source');
-                    source.setAttribute('src', videoPath);
+                    source.setAttribute('src', `${videoPath}?v=20261002`);
                     
                     // 重新加载视频
                     introVideo.load();
                     introVideo.muted = true;
-                    introVideo.play();
+                    startIntroPlayback();
                     
                     // 隐藏开始按钮
                     startContainer.classList.remove('visible');
