@@ -36,7 +36,7 @@
       }
     </style>
     <meta charset="UTF-8">
-    <title>国风筑韵-伊始</title>
+    <title>寻韵古建-伊始</title>
     <style>
         /* ========== 入口页面样式 ========== */
         :root {
@@ -557,7 +557,7 @@
             <div class="nav-container">
                 <!-- 品牌标识 -->
                 <div class="nav-brand">
-                    <a href="index.html">国风筑韵</a>
+                    <a href="index.html">寻韵古建</a>
                 </div>
                 
                 <!-- 导航菜单 -->
@@ -818,8 +818,8 @@
                 <p>所展示为故宫万春亭藻井，明代嘉靖年间所造，上圆下方，以榫卯斗拱层层叠筑，正中是贴金盘龙，龙口衔珠。它以龙凤、牡丹、星宿纹样装饰，金碧辉煌，暗合"天圆地方"的传统宇宙观。</p>
                 <button id="jump-to-caisson" style="margin-top: 15px; padding: 8px 16px; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 4px; color: white; font-size: 14px; cursor: pointer; transition: all 0.3s ease;">跳转介绍</button>
             </div>
-            <img id="title-image" src="大字标题.jpg" alt="大字标题" loading="eager" fetchpriority="high">
-            <h2 id="subtitle">——以古建筑中民居为主的数字化可视平台</h2>
+            <img id="title-image" src="大字标题.jpg?v=20261006" alt="寻韵古建" loading="eager" fetchpriority="high">
+            <h2 id="subtitle">——AI赋能中国传统民居数字文化交互平台</h2>
             <button id="start-btn">启章</button>
         </div>
     </div>
@@ -845,21 +845,31 @@
                 videoLoadingStatus.classList.toggle('hidden', !message);
             }
 
+            let autoplayNeedsGesture = false;
+
             function startIntroPlayback() {
                 const playPromise = introVideo.play();
                 if (playPromise && typeof playPromise.catch === 'function') {
-                    playPromise.catch(() => setVideoLoading('点击页面开始播放开场动画'));
+                    playPromise.catch(() => {
+                        autoplayNeedsGesture = true;
+                        setVideoLoading('点击页面开始播放开场动画');
+                    });
                 }
             }
 
             introVideo.addEventListener('loadeddata', () => setVideoLoading(''));
-            introVideo.addEventListener('playing', () => setVideoLoading(''));
+            introVideo.addEventListener('playing', () => {
+                autoplayNeedsGesture = false;
+                setVideoLoading('');
+            });
             introVideo.addEventListener('waiting', () => setVideoLoading('正在缓冲开场动画…'));
             introVideo.addEventListener('stalled', () => setVideoLoading('网络较慢，正在继续加载…'));
             introVideo.addEventListener('error', () => setVideoLoading('开场动画加载失败，请刷新重试'));
-            document.addEventListener('click', () => {
-                if (introVideo.paused && !introVideo.ended) startIntroPlayback();
-            }, { once: true });
+            document.addEventListener('pointerdown', () => {
+                if (autoplayNeedsGesture && !isAwaitingDirectionChoice && introVideo.paused && !introVideo.ended) {
+                    startIntroPlayback();
+                }
+            });
             
             // 为每个视频配置箭头位置
             const arrowPositionConfig = {
@@ -986,6 +996,9 @@
             const directionArrows = document.getElementById('direction-arrows');
             const directionButtons = document.querySelectorAll('.direction-arrow');
             const arrowLabels = document.querySelectorAll('.arrow-label');
+            const arrowBaseTransforms = new Map(
+                Array.from(directionButtons, (button) => [button, button.style.transform || ''])
+            );
             
             // 为箭头按钮应用位置配置
             function applyArrowPositions() {
@@ -1014,43 +1027,90 @@
             }
             
             
-            // 视频时间更新事件 - 所有视频都支持箭头导向
-            let hasShownArrowsAt1s = false;
-            let hasClickedFrontArrow = false; // 记录是否点击过指向用户的箭头
-            introVideo.addEventListener('timeupdate', () => {
-                // 视频继续播放，播放到1秒后显示导航箭头，避免首页画面停住看起来像动画失效。
-                if (!hasShownArrowsAt1s && !hasClickedFrontArrow && introVideo.currentTime >= 1) {
-                    hasShownArrowsAt1s = true;
-                    
-                    // 应用当前视频的箭头位置配置
-                    applyArrowPositions();
-                    
-                    // 显示方向箭头
-                    directionArrows.style.display = 'flex';
-                    
-                    // 添加淡入动画 - 箭头
-                    directionButtons.forEach((btn, index) => {
-                        btn.style.opacity = '0';
-                        btn.style.transform = btn.style.transform ? btn.style.transform + ' scale(0.5)' : 'scale(0.5)';
-                        setTimeout(() => {
-                            btn.style.transition = 'all 0.5s ease';
-                            btn.style.opacity = '1';
-                            btn.style.transform = btn.style.transform ? btn.style.transform.replace(' scale(0.5)', '') : 'scale(1)';
-                        }, index * 100);
-                    });
-                    
-                    // 添加淡入动画 - 文字标签
-                    arrowLabels.forEach((label, index) => {
-                        label.style.opacity = '0';
-                        label.style.transform = 'translateY(10px)';
-                        setTimeout(() => {
-                            label.style.transition = 'all 0.5s ease';
-                            label.style.opacity = '1';
-                            label.style.transform = 'translateY(0)';
-                        }, index * 100 + 200);
-                    });
+            // 三个开场视频都在第 1 秒暂停，并等待用户点击方向箭头。
+            // requestVideoFrameCallback 能按实际解码帧检测时间，timeupdate 则作为兼容回退。
+            const INTRO_PAUSE_TIME = 1;
+            let hasPausedAt1s = false;
+            let hasClickedFrontArrow = false;
+            let isAwaitingDirectionChoice = false;
+            let videoFrameCallbackId = null;
+
+            function showDirectionPause() {
+                if (hasPausedAt1s || hasClickedFrontArrow || introVideo.ended || introVideo.currentTime < INTRO_PAUSE_TIME) {
+                    return;
                 }
-            });
+
+                hasPausedAt1s = true;
+                isAwaitingDirectionChoice = true;
+                introVideo.pause();
+                setVideoLoading('');
+
+                // 慢设备的 timeupdate 可能略晚，回到第 1 秒可保证三段视频停留画面一致。
+                if (introVideo.currentTime > INTRO_PAUSE_TIME + 0.08) {
+                    try {
+                        introVideo.currentTime = INTRO_PAUSE_TIME;
+                    } catch (error) {
+                        // 某些浏览器在媒体尚未完全可寻址时不允许精确定位，保留当前帧即可。
+                    }
+                }
+
+                applyArrowPositions();
+                directionArrows.style.display = 'flex';
+
+                directionButtons.forEach((btn, index) => {
+                    const baseTransform = arrowBaseTransforms.get(btn) || '';
+                    btn.style.transition = 'none';
+                    btn.style.opacity = '0';
+                    btn.style.transform = `${baseTransform} scale(0.5)`.trim();
+                    setTimeout(() => {
+                        btn.style.transition = 'all 0.5s ease';
+                        btn.style.opacity = '1';
+                        btn.style.transform = baseTransform || 'scale(1)';
+                    }, index * 100);
+                });
+
+                arrowLabels.forEach((label, index) => {
+                    label.style.opacity = '0';
+                    label.style.transform = 'translateY(10px)';
+                    setTimeout(() => {
+                        label.style.transition = 'all 0.5s ease';
+                        label.style.opacity = '1';
+                        label.style.transform = 'translateY(0)';
+                    }, index * 100 + 200);
+                });
+            }
+
+            function watchVideoFrames() {
+                if (typeof introVideo.requestVideoFrameCallback !== 'function' || videoFrameCallbackId !== null) return;
+
+                const checkFrame = (now, metadata) => {
+                    videoFrameCallbackId = null;
+                    if (!hasPausedAt1s && !hasClickedFrontArrow && metadata.mediaTime >= INTRO_PAUSE_TIME) {
+                        showDirectionPause();
+                        return;
+                    }
+                    if (!hasPausedAt1s && !hasClickedFrontArrow && !introVideo.paused && !introVideo.ended) {
+                        videoFrameCallbackId = introVideo.requestVideoFrameCallback(checkFrame);
+                    }
+                };
+
+                videoFrameCallbackId = introVideo.requestVideoFrameCallback(checkFrame);
+            }
+
+            function resetDirectionPause() {
+                hasPausedAt1s = false;
+                hasClickedFrontArrow = false;
+                isAwaitingDirectionChoice = false;
+                directionArrows.style.display = 'none';
+                if (videoFrameCallbackId !== null && typeof introVideo.cancelVideoFrameCallback === 'function') {
+                    introVideo.cancelVideoFrameCallback(videoFrameCallbackId);
+                }
+                videoFrameCallbackId = null;
+            }
+
+            introVideo.addEventListener('timeupdate', showDirectionPause);
+            introVideo.addEventListener('playing', watchVideoFrames);
+            introVideo.addEventListener('loadedmetadata', watchVideoFrames);
             
             // 方向箭头悬停效果
             directionButtons.forEach(btn => {
@@ -1094,9 +1154,10 @@
                             // 隐藏方向箭头
                             directionArrows.style.display = 'none';
                             // 继续播放视频
+                            isAwaitingDirectionChoice = false;
+                            hasPausedAt1s = false;
+                            hasClickedFrontArrow = true;
                             startIntroPlayback();
-                            hasShownArrowsAt1s = false;
-                            hasClickedFrontArrow = true; // 标记已点击过，本次会话不再显示箭头
                             break;
                     }
                 });
@@ -1113,12 +1174,8 @@
                     const videoPath = button.getAttribute('data-video');
                     currentVideo = videoPath;
                     
-                    // 重置暂停标记（每次切换视频都重置）
-                    hasShownArrowsAt1s = false;
-                    hasClickedFrontArrow = false; // 同时重置点击标记
-                    
-                    // 隐藏方向箭头
-                    directionArrows.style.display = 'none';
+                    // 每次切换视频，都重新启用第 1 秒暂停。
+                    resetDirectionPause();
                     
                     // 更新视频源
                     const source = introVideo.querySelector('source');
