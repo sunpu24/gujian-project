@@ -69,9 +69,6 @@ body {
 #ai-chat-modal {
   position: fixed !important;
   inset: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
 }
 
 /* Chat dialogs are created by page scripts with legacy fixed coordinates.
