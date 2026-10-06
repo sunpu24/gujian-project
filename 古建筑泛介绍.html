@@ -4,7 +4,7 @@
         <script src="asset-loading.js" defer></script>
   <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <link rel="stylesheet" href="responsive-layout.css" />
+    <link rel="stylesheet" href="responsive-layout.css?v=20261006-gene-fix" />
   <title>寻韵古建-古构</title>
   <style>
     html,
@@ -449,6 +449,17 @@
     body.panel-mode .intro-panel.visible {
       display: block;
       margin-top: 0;
+    }
+
+    /* 面板内容保持参考库的切换逻辑，但其操作按钮需要高于透明主导航，
+       否则桌面端顶部区域会被导航容器截获点击。 */
+    body.panel-mode #top-nav {
+      pointer-events: none;
+    }
+
+    body.panel-mode #top-nav a,
+    body.panel-mode #top-nav button {
+      pointer-events: auto;
     }
 
     .panel-header {
@@ -7245,6 +7256,7 @@
         hideAllPanels();
         targetPanel.classList.add('visible');
         document.body.classList.add('panel-mode');
+        window.scrollTo(0, 0);
 
         if (panelId === 'buildingStructurePanel') {
           showSection('zhutigoujia');
@@ -7258,6 +7270,7 @@
       function closePanels() {
         hideAllPanels();
         document.body.classList.remove('panel-mode');
+        window.scrollTo(0, 0);
         if (materialModal) {
           materialModal.hidden = true;
         }
@@ -7554,6 +7567,7 @@
             if (panel) {
               panel.classList.add('visible');
               document.body.classList.add('panel-mode');
+              window.scrollTo(0, 0);
             }
           });
         });
@@ -7570,6 +7584,7 @@
             if (aestheticsPanel) {
               aestheticsPanel.classList.add('visible');
             }
+            window.scrollTo(0, 0);
             // 保持panel-mode状态
           });
         }

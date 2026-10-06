@@ -943,6 +943,16 @@ body {
     overflow-x: hidden !important;
   }
 
+  /* The page header sits above normal content. Keep panel controls below it
+     on touch layouts so the transparent navigation layer cannot intercept
+     their taps. */
+  .page-gene .intro-panel > .panel-header,
+  .page-gene .roof-intro-panel > .roof-intro-topbar {
+    margin-top: 8px !important;
+    position: relative !important;
+    z-index: 3 !important;
+  }
+
   .page-gene .panel-header {
     padding: 10px !important;
   }
@@ -988,6 +998,48 @@ body {
     width: 100% !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* The reference page uses a single desktop row of seven tall buttons.
+     Reflow that same complete set into a touch-friendly grid instead of
+     letting most of the buttons remain outside the viewport. */
+  .page-gene #jianzhumeixue > .content-with-image {
+    min-height: 0 !important;
+    padding: 18px 8px !important;
+    align-items: stretch !important;
+  }
+
+  .page-gene #jianzhumeixue .content-text {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    gap: 10px !important;
+  }
+
+  .page-gene #jianzhumeixue .aesthetic-feature-btn {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 150px !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    transform: none !important;
+    font-size: 18px !important;
+    line-height: 1.35 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-size: cover !important;
+    background-position: center !important;
+    touch-action: manipulation;
+  }
+
+  .page-gene #jianzhumeixue .aesthetic-feature-btn:last-child {
+    grid-column: 1 / -1;
   }
 
   /* Point map becomes map-above / information-below. */
