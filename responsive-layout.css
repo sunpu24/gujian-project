@@ -148,6 +148,25 @@ body {
   height: 100dvh !important;
 }
 
+/* Architecture gene desktop layout.
+   The reference composition deliberately leaves a 40px frame of the page
+   background around every detail panel. Keep that frame on desktop while
+   retaining the viewport-height adaptation introduced for deployment. */
+@media (min-width: 769px) {
+  body.page-gene {
+    position: static !important;
+    padding: 40px !important;
+    box-sizing: border-box !important;
+    overflow: auto !important;
+  }
+
+  body.page-gene.panel-mode .intro-panel.visible {
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+}
+
 /* Keep controls reachable on small screens. */
 @media (max-width: 900px) {
   .nav-container {
