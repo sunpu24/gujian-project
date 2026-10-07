@@ -15,9 +15,7 @@
     </style>
     <meta charset="UTF-8">
     <title>寻韵古建-拾萃</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1646424915/camera_utils.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js" defer></script>
     <style>
         /* ========== 抽卡页面样式 ========== */
         :root {
@@ -26,7 +24,7 @@
             --choose-card-bg-image: url('背景.webp');
             --text-color: #f4d15e;
             --text-shadow: #000;
-            
+
             /* 摄像头和状态栏 */
             --camera-border: #333;
             --camera-opacity: 1.0;
@@ -838,6 +836,8 @@
             };
             
             // ========== 图片预加载 ==========
+            let preloadedImages = [];
+
             function preloadImages() {
                 return new Promise((resolve) => {
                     const allImages = [...cardImages.back, ...cardImages.front];
@@ -853,6 +853,7 @@
                     const loadPromises = allImages.map(imgSrc => {
                         return new Promise((loadResolve) => {
                             const img = new Image();
+                            img.decoding = 'async';
                             img.onload = () => {
                                 loadedCount++;
                                 // 减少DOM操作，只在关键节点更新进度
@@ -871,8 +872,8 @@
                     });
                     
                     Promise.all(loadPromises).then((loadedImages) => {
-                        // 将加载完成的图片对象缓存起来
-                        window.cachedImages = loadedImages;
+                        // 仅在卡牌创建前保留预加载对象，之后即可由浏览器资源缓存接管
+                        preloadedImages = loadedImages;
                         resolve();
                     });
                 });
@@ -1005,14 +1006,13 @@
                     body.className = 'card-body';
                     
                     // 使用缓存的图片对象，避免重复加载
-                    const cachedImages = window.cachedImages || [];
-                    const backImg = cachedImages[i];
-                    const frontImg = cachedImages[i + cardCount];
+                    const backImg = preloadedImages[i];
+                    const frontImg = preloadedImages[i + cardCount];
                     
                     // 设置卡牌正反面HTML结构
                     body.innerHTML = `
-                        <div class="face back"><img src="${backImg ? backImg.src : cardImages.back[i]}" alt="卡牌背面 ${i+1}" loading="lazy"></div>
-                        <div class="face front"><img src="${frontImg ? frontImg.src : cardImages.front[i]}" alt="卡牌正面 ${i+1}" loading="lazy"></div>
+                        <div class="face back"><img src="${backImg ? backImg.src : cardImages.back[i]}" alt="卡牌背面 ${i+1}" loading="lazy" decoding="async"></div>
+                        <div class="face front"><img src="${frontImg ? frontImg.src : cardImages.front[i]}" alt="卡牌正面 ${i+1}" loading="lazy" decoding="async"></div>
                     `;
                     
                     // 添加到文档片段
@@ -1023,6 +1023,8 @@
                 
                 // 一次性将所有卡牌添加到DOM，减少重排
                 carousel.appendChild(fragment);
+                // DOM 图片已接管对应资源，释放额外的 Image 对象引用
+                preloadedImages = [];
                 
                 // 如果不是从数据可视化页面返回，添加动画
                 if (!fromDataVisualization) {
@@ -1040,7 +1042,10 @@
                     setTimeout(() => {
                         requestAnimationFrame(() => {
                             interactionState = "IDLE";
-                            statusDiv.innerHTML = "✅ 初始化成功！<br>✊ 握拳：旋转洗牌中...<br>☝️ 比1：选择该卡牌<br>🖐️ 张手：查看详情";
+                            startGameLoop();
+                            statusDiv.innerHTML = gestureFallbackEnabled
+                                ? "🖱️ 使用鼠标交互模式<br>点击卡牌：选择卡牌<br>双击卡牌：查看详情"
+                                : "✅ 初始化成功！<br>✊ 握拳：旋转洗牌中...<br>☝️ 比1：选择该卡牌<br>🖐️ 张手：查看详情";
                         });
                     }, cardCount * 80 + 800); // 调整等待时间，与新的延迟匹配
                 }
@@ -1082,19 +1087,17 @@
                         }
                     }
                 }
+
+                startGameLoop();
             }
             
-            // 开始初始化
-            initialize();
-
             // ========== 2. 动画循环 ==========
-            let lastTime = 0;
             let rotationSpeed = 0.8; // 调整旋转速度
             let lastTransformValue = ''; // 缓存上次的transform值，避免不必要的DOM更新
-            const frameInterval = 1000 / 60; // 限制为60fps
-            let lastFrameTime = 0;
-            
-            function gameLoop(timestamp) {
+            let gameLoopId = null;
+
+            function gameLoop() {
+                gameLoopId = null;
                 // 如果详情页打开，停止一切背景旋转计算
                 if (!isDetailPageOpen) {
                     // 空闲状态下自动旋转
@@ -1127,17 +1130,36 @@
                         }
                     }
                 }
-                // 递归调用，保持动画持续运行
-                requestAnimationFrame(gameLoop);
+
+                // 只在页面可见且确实需要旋转/插值时继续请求下一帧
+                if (!document.hidden && !isDetailPageOpen &&
+                    (interactionState === "IDLE" || Math.abs(targetRotation - currentRotation) > 0.001)) {
+                    gameLoopId = requestAnimationFrame(gameLoop);
+                }
             }
-            
+
+            function startGameLoop() {
+                if (gameLoopId === null && !document.hidden && !isDetailPageOpen) {
+                    gameLoopId = requestAnimationFrame(gameLoop);
+                }
+            }
+
+            function stopGameLoop() {
+                if (gameLoopId !== null) {
+                    cancelAnimationFrame(gameLoopId);
+                    gameLoopId = null;
+                }
+            }
+
             // 启动动画循环
-            requestAnimationFrame(gameLoop);
+            startGameLoop();
 
             // ========== 3. 详情页逻辑 ==========
         // 打开详情页
         function openDetailPage(index) {
             isDetailPageOpen = true;
+            stopGameLoop();
+            pauseGestureRecognition();
             
             // 更新详情页内容
             detailImage.src = cardImages.front[index];
@@ -1166,6 +1188,8 @@
             // 回到选中状态，等待用户指令
             interactionState = "ONE"; 
             statusDiv.innerText = "请握拳重新开始，或继续选择";
+            startGameLoop();
+            resumeGestureRecognition();
         }
         
         // 切换到上一张卡牌
@@ -1244,6 +1268,7 @@
                     // 初始化完成，进入正常状态
                     initComplete = true;
                     interactionState = "IDLE";
+                    startGameLoop();
                     statusDiv.innerHTML = "✅ 初始化成功！<br>✊ 握拳：旋转洗牌中...<br>☝️ 比1：选择该卡牌<br>🖐️ 张手：查看详情";
                     // 移除所有卡牌的选中状态
                     cardsBody.forEach(c => c.classList.remove('selected'));
@@ -1258,6 +1283,7 @@
                 // 握拳状态：重置为旋转洗牌
                 if (gesture === "FIST") {
                     interactionState = "IDLE";
+                    startGameLoop();
                     statusDiv.innerHTML = "✊ 握拳：旋转洗牌中...<br>☝️ 比1：选择该卡牌<br>🖐️ 张手：查看详情";
                     // 移除所有卡牌的选中状态
                     cardsBody.forEach(c => c.classList.remove('selected'));
@@ -1288,245 +1314,357 @@
             }
         }
 
-        // 手势识别优化：添加防抖和状态管理
-        let lastGesture = "UNKNOWN";
-        let gestureTimer = null;
-        const gestureDebounceTime = 200; // 防抖时间
+        // ========== 5. MediaPipe手势识别配置 ==========
+        const GESTURE_FRAME_INTERVAL = 1000 / 15;
+        const videoElement = document.getElementById('input_video');
+        videoElement.width = 120;
+        videoElement.height = 90;
+        videoElement.muted = true;
+        videoElement.playsInline = true;
 
-        // 初始化手势识别（优化版，带超时和降级）
-        async function initGestureRecognition() {
-            // 创建超时Promise
-            const timeoutPromise = new Promise((resolve, reject) => {
-                setTimeout(() => {
-                    reject(new Error('手势识别初始化超时'));
-                }, 10000); // 10秒超时
-            });
+        let handsInstance = null;
+        let cameraStream = null;
+        let gestureLoopTimer = null;
+        let gestureGeneration = 0;
+        let gestureInitInProgress = false;
+        let gestureReady = false;
+        let gestureFallbackEnabled = false;
+        let pageSuspended = false;
+        let processingGestureFrame = false;
+        let lastGesture = null;
+        let lastGestureTime = 0;
+        const gestureDebounceTime = 80;
 
-            const initPromise = new Promise(async (resolve, reject) => {
-                try {
-                    // ========== 5. MediaPipe手势识别配置 ==========
-                    // 优化：预加载状态反馈
-                    statusDiv.innerHTML = "🤚 正在初始化手势识别...<br>请将手放在摄像头前";
-                    
-                    // 初始化MediaPipe Hands实例 - 使用指定版本的CDN路径
-                    const hands = new Hands({
-                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
-                    });
-                    
-                    // 优化手势识别参数 - 提高识别率
-                    hands.setOptions({ 
-                        maxNumHands: 1, // 最多识别1只手，减少计算量
-                        modelComplexity: 1, // 使用高复杂度模型，提高识别准确率
-                        minDetectionConfidence: 0.3, // 降低检测置信度，更容易检测到手
-                        minTrackingConfidence: 0.3, // 降低跟踪置信度，减少丢失跟踪
-                        selfieMode: true, // 启用自拍模式，优化用户体验
-                        smoothLandmarks: true, // 平滑关键点，提高稳定性
-                        staticImageMode: false, // 对于视频流使用false，提高性能
-                        refineLandmarks: true // 启用细化关键点，提高手势识别准确性
-                    });
-                
-                // 手势识别结果防抖 - 降低延迟
-                let lastGesture = null;
-                let lastGestureTime = 0;
-                const gestureDebounceTime = 80; // 调整到80ms，平衡响应速度和性能
-                let frameCount = 0; // 帧计数器，用于限制处理频率
-                
-                // 优化：简化手势分析算法，提高识别率
-                    function analyzeGesture(landmarks) {
-                        // 关键点索引：
-                        // 0: 手腕, 4: 拇指尖, 8: 食指尖, 12: 中指尖, 16: 无名指尖, 20: 小指尖
-                        // 5: 拇指根部, 9: 食指根部, 13: 中指根部, 17: 无名指根部, 21: 小指根部
-                        
-                        // 计算手指状态：指尖是否高于手指根部（y值更小表示位置更高）
-                        const thumbExtended = Math.abs(landmarks[4].x - landmarks[17].x) > 0.10;
-                        const indexExtended = landmarks[8].y < landmarks[6].y * 0.95;
-                        const middleExtended = landmarks[12].y < landmarks[10].y * 0.95;
-                        const ringExtended = landmarks[16].y < landmarks[14].y * 0.95;
-                        const pinkyExtended = landmarks[20].y < landmarks[18].y * 0.95;
-                        
-                        // 计算伸直和弯曲的手指数量
-                        const extendedCount = [thumbExtended, indexExtended, middleExtended, ringExtended, pinkyExtended]
-                            .filter(v => v).length;
-                        const bentCount = 5 - extendedCount;
-                        
-                        console.log(`手指状态 - 拇指:${thumbExtended?1:0} 食指:${indexExtended?1:0} 中指:${middleExtended?1:0} 无名指:${ringExtended?1:0} 小指:${pinkyExtended?1:0}`);
-                        console.log(`伸直:${extendedCount} 弯曲:${bentCount}`);
-                        
-                        // 1. 握拳检测：所有手指都弯曲（至少4根手指弯曲）
-                        const fistDetected = bentCount >= 4 && !indexExtended && !middleExtended;
-                        if (fistDetected) {
-                            console.log('手势识别: 握拳');
-                            return "FIST";
-                        }
-                        
-                        // 2. 比1检测：食指伸直，其他手指弯曲（至少3根手指弯曲）
-                        const oneDetected = indexExtended && bentCount >= 3;
-                        if (oneDetected) {
-                            console.log('手势识别: 比1');
-                            return "ONE";
-                        }
-                        
-                        // 3. 张开手检测：至少4根手指伸直，且手指间距足够
-                        const fingersSpread = Math.abs(landmarks[8].x - landmarks[20].x) > 0.15;
-                        const openDetected = extendedCount >= 4 && fingersSpread;
-                        if (openDetected) {
-                            console.log('手势识别: 张开手');
-                            return "OPEN";
-                        }
-                        
-                        console.log('手势识别: 无');
-                        return "NONE";
-                    }
-                
-                // 手势识别结果回调 - 优化处理逻辑
-                hands.onResults(results => {
-                    // 如果详情页打开，忽略所有手势
-                    if (isDetailPageOpen) return;
-                    
-                    // 帧率限制：每4帧处理一次，减少卡顿
-                    frameCount++;
-                    if (frameCount % 4 !== 0) return;
-                    
-                    // 如果检测到手部关键点
-                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                        const landmarks = results.multiHandLandmarks[0];
-                        
-                        // 减少日志输出，每20帧输出一次调试信息
-                        if (frameCount % 20 === 0) {
-                            console.log('检测到手，关键点数量:', landmarks.length);
-                        }
-                        
-                        const currentTime = Date.now();
-                        // 防抖处理（80ms）
-                        if (currentTime - lastGestureTime > gestureDebounceTime) {
-                            const gesture = analyzeGesture(landmarks);
-                            // 只有手势变化时才更新状态
-                            if (gesture !== lastGesture) {
-                                console.log('手势变化:', lastGesture, '->', gesture);
-                                updateState(gesture);
-                                lastGesture = gesture;
-                                lastGestureTime = currentTime;
-                            }
-                        }
-                    } else {
-                        // 减少日志输出
-                        if (frameCount % 20 === 0) {
-                            console.log('未检测到手');
-                        }
-                        // 没有检测到手时，定期重置状态（每300ms）
-                        const currentTime = Date.now();
-                        if (lastGesture !== null && currentTime - lastGestureTime > 300) {
-                            updateState("NONE");
-                            lastGesture = null;
-                            lastGestureTime = currentTime;
-                        }
-                    }
-                });
-                
-                // 使用原生 Web API 初始化摄像头
-                const videoElement = document.getElementById('input_video');
-                videoElement.width = 120;
-                videoElement.height = 90;
-                
-                // 请求摄像头权限并启动视频流
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        width: 120, 
-                        height: 90,
-                        facingMode: 'user' // 使用前置摄像头
-                    },
-                    audio: false
-                });
-                
-                videoElement.srcObject = stream;
-                
-                // 等待视频流就绪
-                await new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => {
-                        videoElement.play();
-                        resolve();
-                    };
-                });
-                
-                // 设置视频流处理循环
-                let processingFrame = false;
-                const processFrame = async () => {
-                    if (!isDetailPageOpen && !processingFrame) {
-                        processingFrame = true;
-                        try {
-                            await hands.send({image: videoElement});
-                        } catch (e) {
-                            console.warn('Failed to process frame:', e);
-                        }
-                        processingFrame = false;
-                    }
-                    requestAnimationFrame(processFrame);
-                };
-                
-                // 启动帧处理循环
-                processFrame();
-                console.log('手势识别系统初始化完成');
-                
-                // 初始化完成后更新状态
-                statusDiv.innerHTML = "✅ 手势识别就绪！<br>✊ 握拳：开始/旋转卡牌<br>☝️ 比1：选择卡牌<br>🖐️ 张手：查看详情";
-                
-                resolve();
-            } catch (error) {
-                reject(error);
-            }
-        });
+        function analyzeGesture(landmarks) {
+            // 计算手指状态：指尖是否高于手指根部（y值更小表示位置更高）
+            const thumbExtended = Math.abs(landmarks[4].x - landmarks[17].x) > 0.10;
+            const indexExtended = landmarks[8].y < landmarks[6].y * 0.95;
+            const middleExtended = landmarks[12].y < landmarks[10].y * 0.95;
+            const ringExtended = landmarks[16].y < landmarks[14].y * 0.95;
+            const pinkyExtended = landmarks[20].y < landmarks[18].y * 0.95;
+            const extendedCount = [thumbExtended, indexExtended, middleExtended, ringExtended, pinkyExtended]
+                .filter(Boolean).length;
+            const bentCount = 5 - extendedCount;
 
-            // 降级到鼠标交互模式
-            function fallbackToMouseInteraction() {
-                // 隐藏摄像头视频
-                const inputVideo = document.getElementById('input_video');
-                if (inputVideo) {
-                    inputVideo.style.display = 'none';
+            if (bentCount >= 4 && !indexExtended && !middleExtended) return "FIST";
+            if (indexExtended && bentCount >= 3) return "ONE";
+
+            const fingersSpread = Math.abs(landmarks[8].x - landmarks[20].x) > 0.15;
+            if (extendedCount >= 4 && fingersSpread) return "OPEN";
+            return "NONE";
+        }
+
+        function handleGestureResults(results, sessionId) {
+            if (sessionId !== gestureGeneration || document.hidden || pageSuspended || isDetailPageOpen) return;
+
+            const currentTime = Date.now();
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                if (currentTime - lastGestureTime > gestureDebounceTime) {
+                    const gesture = analyzeGesture(results.multiHandLandmarks[0]);
+                    if (gesture !== lastGesture) {
+                        updateState(gesture);
+                        lastGesture = gesture;
+                        lastGestureTime = currentTime;
+                    }
                 }
-                
-                // 更新状态提示
-                statusDiv.innerHTML = "🖱️ 使用鼠标交互模式<br>点击卡牌：选择卡牌<br>双击卡牌：查看详情";
-                
-                // 为卡牌添加点击事件
-                cardsBody.forEach((card, index) => {
-                    card.addEventListener('click', function() {
-                        if (isDetailPageOpen) return;
-                        
-                        // 选择卡牌
-                        cardsBody.forEach(c => c.classList.remove('selected'));
-                        card.classList.add('selected');
-                        activeIndex = index;
-                        interactionState = "ONE";
-                        statusDiv.innerHTML = "☝️ 卡牌已选中！<br>双击查看详情，或点击其他卡牌切换";
-                    });
-                    
-                    card.addEventListener('dblclick', function() {
-                        if (isDetailPageOpen) return;
-                        if (activeIndex >= 0) {
-                            openDetailPage(activeIndex);
-                        }
-                    });
-                });
-                
-                // 自动完成初始化，进入空闲状态
-                initComplete = true;
-                interactionState = "IDLE";
-            }
-
-            try {
-                // 使用Promise.race实现超时控制
-                await Promise.race([initPromise, timeoutPromise]);
-            } catch (error) {
-                console.error('手势识别初始化失败或超时:', error);
-                // 降级到鼠标交互模式
-                fallbackToMouseInteraction();
+            } else if (lastGesture !== null && currentTime - lastGestureTime > 300) {
+                updateState("NONE");
+                lastGesture = null;
+                lastGestureTime = currentTime;
             }
         }
 
-        // 初始化手势识别
-        (async function() {
-            await initGestureRecognition();
-        })();
+        function canProcessGestureFrames() {
+            return gestureReady && handsInstance && cameraStream && !document.hidden &&
+                !pageSuspended && !isDetailPageOpen;
+        }
+
+        function stopGestureLoop() {
+            if (gestureLoopTimer !== null) {
+                clearTimeout(gestureLoopTimer);
+                gestureLoopTimer = null;
+            }
+        }
+
+        function scheduleGestureFrame(delay = 0) {
+            if (gestureLoopTimer === null && canProcessGestureFrames()) {
+                gestureLoopTimer = setTimeout(processGestureFrame, delay);
+            }
+        }
+
+        async function processGestureFrame() {
+            gestureLoopTimer = null;
+            if (!canProcessGestureFrames() || processingGestureFrame) return;
+
+            const sessionId = gestureGeneration;
+            const frameStart = performance.now();
+            processingGestureFrame = true;
+            try {
+                if (videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                    await handsInstance.send({ image: videoElement });
+                }
+            } catch (error) {
+                if (sessionId === gestureGeneration) {
+                    console.warn('Failed to process frame:', error);
+                }
+            } finally {
+                processingGestureFrame = false;
+                if (sessionId === gestureGeneration && canProcessGestureFrames()) {
+                    const elapsed = performance.now() - frameStart;
+                    scheduleGestureFrame(Math.max(0, GESTURE_FRAME_INTERVAL - elapsed));
+                }
+            }
+        }
+
+        function setCameraTracksEnabled(enabled) {
+            if (cameraStream) {
+                cameraStream.getVideoTracks().forEach(track => {
+                    track.enabled = enabled;
+                });
+            }
+        }
+
+        function startGestureLoop() {
+            if (!canProcessGestureFrames()) return;
+            setCameraTracksEnabled(true);
+            const playPromise = videoElement.play();
+            if (playPromise) playPromise.catch(() => {});
+            scheduleGestureFrame();
+        }
+
+        function pauseGestureRecognition() {
+            stopGestureLoop();
+            setCameraTracksEnabled(false);
+            videoElement.pause();
+        }
+
+        function stopStream(stream) {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+        }
+
+        function closeHands(instance) {
+            if (!instance || typeof instance.close !== 'function') return;
+            try {
+                Promise.resolve(instance.close()).catch(() => {});
+            } catch (error) {
+                console.warn('Failed to close MediaPipe Hands:', error);
+            }
+        }
+
+        function releaseGestureResources() {
+            gestureGeneration++;
+            gestureInitInProgress = false;
+            gestureReady = false;
+            stopGestureLoop();
+
+            const streamToStop = cameraStream;
+            const handsToClose = handsInstance;
+            cameraStream = null;
+            handsInstance = null;
+            processingGestureFrame = false;
+            stopStream(streamToStop);
+            closeHands(handsToClose);
+            videoElement.pause();
+            videoElement.srcObject = null;
+            lastGesture = null;
+            lastGestureTime = 0;
+        }
+
+        function createGestureAbortError() {
+            const error = new Error('手势识别初始化已取消');
+            error.name = 'AbortError';
+            return error;
+        }
+
+        // 初始化手势识别（带超时、生命周期清理和鼠标降级）
+        async function initGestureRecognition(showStatus = true) {
+            if (gestureReady) {
+                startGestureLoop();
+                return;
+            }
+            if (gestureInitInProgress || gestureFallbackEnabled || pageSuspended || document.hidden) return;
+
+            gestureInitInProgress = true;
+            const sessionId = ++gestureGeneration;
+            let localHands = null;
+            let localStream = null;
+            let timeoutId = null;
+
+            if (showStatus && !isDetailPageOpen) {
+                statusDiv.innerHTML = "🤚 正在初始化手势识别...<br>请将手放在摄像头前";
+            }
+
+            const cleanupLocalResources = () => {
+                if (localStream) {
+                    stopStream(localStream);
+                    localStream = null;
+                }
+                if (localHands) {
+                    closeHands(localHands);
+                    localHands = null;
+                }
+            };
+
+            const initPromise = (async () => {
+                try {
+                    if (typeof Hands !== 'function') throw new Error('MediaPipe Hands 未加载');
+
+                    localHands = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+                    });
+                    localHands.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.3,
+                        minTrackingConfidence: 0.3,
+                        selfieMode: true,
+                        smoothLandmarks: true,
+                        staticImageMode: false,
+                        refineLandmarks: true
+                    });
+                    localHands.onResults(results => handleGestureResults(results, sessionId));
+
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: 120,
+                            height: 90,
+                            facingMode: 'user'
+                        },
+                        audio: false
+                    });
+
+                    if (sessionId !== gestureGeneration || pageSuspended || gestureFallbackEnabled) {
+                        throw createGestureAbortError();
+                    }
+
+                    handsInstance = localHands;
+                    cameraStream = localStream;
+                    localHands = null;
+                    localStream = null;
+                    gestureReady = true;
+                    gestureInitInProgress = false;
+                    videoElement.srcObject = cameraStream;
+
+                    if (document.hidden || isDetailPageOpen) {
+                        pauseGestureRecognition();
+                    } else {
+                        startGestureLoop();
+                    }
+
+                    if (showStatus && !isDetailPageOpen) {
+                        statusDiv.innerHTML = "✅ 手势识别就绪！<br>✊ 握拳：开始/旋转卡牌<br>☝️ 比1：选择卡牌<br>🖐️ 张手：查看详情";
+                    }
+                } catch (error) {
+                    cleanupLocalResources();
+                    throw error;
+                }
+            })();
+
+            const timeoutPromise = new Promise((resolve, reject) => {
+                timeoutId = setTimeout(() => reject(new Error('手势识别初始化超时')), 10000);
+            });
+
+            try {
+                await Promise.race([initPromise, timeoutPromise]);
+            } catch (error) {
+                const isCurrentSession = sessionId === gestureGeneration;
+                if (isCurrentSession) {
+                    gestureGeneration++;
+                    gestureInitInProgress = false;
+                    gestureReady = false;
+                }
+                cleanupLocalResources();
+
+                // Promise.race 超时后底层权限请求仍可能完成；届时让它自行进入取消分支并清理。
+                if (error.message === '手势识别初始化超时') {
+                    initPromise.catch(() => {});
+                }
+
+                if (!pageSuspended && error.name !== 'AbortError') {
+                    console.error('手势识别初始化失败或超时:', error);
+                    fallbackToMouseInteraction();
+                }
+            } finally {
+                clearTimeout(timeoutId);
+                if (sessionId === gestureGeneration) gestureInitInProgress = false;
+            }
+        }
+
+        // 降级到鼠标交互模式；使用事件委托，卡牌稍后创建也仍可交互
+        function fallbackToMouseInteraction() {
+            if (gestureFallbackEnabled) return;
+            gestureFallbackEnabled = true;
+            releaseGestureResources();
+            videoElement.style.display = 'none';
+            statusDiv.innerHTML = "🖱️ 使用鼠标交互模式<br>点击卡牌：选择卡牌<br>双击卡牌：查看详情";
+
+            carousel.addEventListener('click', event => {
+                if (isDetailPageOpen) return;
+                const card = event.target.closest('.card-body');
+                const index = cardsBody.indexOf(card);
+                if (index < 0) return;
+
+                cardsBody.forEach(item => item.classList.remove('selected'));
+                card.classList.add('selected');
+                activeIndex = index;
+                interactionState = "ONE";
+                statusDiv.innerHTML = "☝️ 卡牌已选中！<br>双击查看详情，或点击其他卡牌切换";
+            });
+
+            carousel.addEventListener('dblclick', event => {
+                if (isDetailPageOpen) return;
+                const card = event.target.closest('.card-body');
+                const index = cardsBody.indexOf(card);
+                if (index >= 0) openDetailPage(index);
+            });
+
+            initComplete = true;
+            interactionState = "IDLE";
+            startGameLoop();
+        }
+
+        function resumeGestureRecognition() {
+            if (gestureFallbackEnabled || document.hidden || pageSuspended || isDetailPageOpen) return;
+            if (gestureReady) {
+                startGestureLoop();
+            } else {
+                initGestureRecognition(false);
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopGameLoop();
+                pauseGestureRecognition();
+            } else if (!pageSuspended) {
+                startGameLoop();
+                resumeGestureRecognition();
+            }
+        });
+
+        window.addEventListener('pagehide', event => {
+            pageSuspended = true;
+            stopGameLoop();
+            if (event.persisted) {
+                pauseGestureRecognition();
+            } else {
+                releaseGestureResources();
+            }
+        });
+
+        window.addEventListener('pageshow', () => {
+            pageSuspended = false;
+            if (!document.hidden) {
+                startGameLoop();
+                resumeGestureRecognition();
+            }
+        });
+
+        // 所有动画和生命周期函数就绪后再创建卡牌，兼容同步恢复详情页的路径
+        initialize();
+
+            // 初始化手势识别
+        initGestureRecognition();
         
         // 初始化完成
         statusDiv.innerHTML = "初始化中...<br>卡牌正在入场，请稍候";
@@ -1551,6 +1689,7 @@
             let mouseY = 0;
             let circleX = 0;
             let circleY = 0;
+            let mouseFollowerFrameId = null;
             
             // 鼠标移动事件
             document.addEventListener('mousemove', (e) => {
@@ -1560,10 +1699,15 @@
                 // 直接更新小圆点位置
                 mouseDot.style.left = mouseX + 'px';
                 mouseDot.style.top = mouseY + 'px';
+
+                if (mouseFollowerFrameId === null && !document.hidden) {
+                    mouseFollowerFrameId = requestAnimationFrame(animate);
+                }
             });
             
             // 动画循环，实现圆圈追逐圆点
             function animate() {
+                mouseFollowerFrameId = null;
                 // 计算圆圈到圆点的距离
                 const dx = mouseX - circleX;
                 const dy = mouseY - circleY;
@@ -1576,9 +1720,18 @@
                 mouseCircle.style.left = circleX + 'px';
                 mouseCircle.style.top = circleY + 'px';
                 
-                // 继续动画
-                requestAnimationFrame(animate);
+                // 接近目标时停止循环；下次鼠标移动再按需唤醒
+                if (!document.hidden && (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1)) {
+                    mouseFollowerFrameId = requestAnimationFrame(animate);
+                }
             }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && mouseFollowerFrameId !== null) {
+                    cancelAnimationFrame(mouseFollowerFrameId);
+                    mouseFollowerFrameId = null;
+                }
+            });
             
             // 鼠标点击事件
             document.addEventListener('click', () => {
@@ -1588,8 +1741,8 @@
                 }, 150);
             });
             
-            // 启动动画
-            animate();
+            // 首帧按需定位，静止后不保留永久动画循环
+            mouseFollowerFrameId = requestAnimationFrame(animate);
         }
     })();
     

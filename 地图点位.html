@@ -16,9 +16,7 @@
     <meta charset="UTF-8">
     <title>寻韵古建-地舆</title>
     <!-- 高德地图 API -->
-    <script src="https://webapi.amap.com/maps?v=2.0&key=eaba9ff3bd5d7410cd0628b70d6fd324"></script>
-    <!-- 高德地图UI插件 -->
-    <script src="https://webapi.amap.com/ui/1.1/main.js?v=1.1.1"></script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=eaba9ff3bd5d7410cd0628b70d6fd324" defer></script>
     <style>
         * {
             margin: 0;
@@ -623,6 +621,12 @@
         let currentData = 'culture'; // culture, village, 或 allVillages
         let selectedDynasties = ['全部']; // 默认选择全部朝代
         let selectedRegions = ['全部']; // 默认选择全部地区
+        const pointDataCache = new Map();
+        const pointDataRequests = new Map();
+        const markerIconCache = new Map();
+        const MARKER_BATCH_SIZE = 300;
+        let markerBuildFrame = null;
+        let loadRequestId = 0;
         
         // 地区省份映射
         const regionProvinceMap = {
@@ -872,145 +876,207 @@
             }
         }
         
+        // 获取并缓存解析后的点位数据；同一文件的并发请求也只发送一次。
+        function getPointData(dataFile) {
+            if (pointDataCache.has(dataFile)) {
+                return Promise.resolve(pointDataCache.get(dataFile));
+            }
+            if (pointDataRequests.has(dataFile)) {
+                return pointDataRequests.get(dataFile);
+            }
+
+            // 每次新页面会向服务器做条件校验，确保部署后的 JSON 更新可及时生效；
+            // 本页内仍由 pointDataCache 复用，不会因筛选重复下载。
+            const request = fetch(dataFile, { cache: 'no-cache' })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!Array.isArray(data)) {
+                        throw new Error('点位数据格式无效');
+                    }
+                    pointDataCache.set(dataFile, data);
+                    pointDataRequests.delete(dataFile);
+                    return data;
+                })
+                .catch(error => {
+                    pointDataRequests.delete(dataFile);
+                    throw error;
+                });
+
+            pointDataRequests.set(dataFile, request);
+            return request;
+        }
+
+        // 同色点位共享一个不可变图标实例，避免为数千个点重复解析同一 SVG。
+        function getMarkerIcon(markerColor) {
+            if (!markerIconCache.has(markerColor)) {
+                const svgIcon = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="6" cy="6" r="6" fill="' + markerColor + '" fill-opacity="0.8" stroke="#fff" stroke-width="1"/></svg>')}`;
+                markerIconCache.set(markerColor, new AMap.Icon({
+                    size: new AMap.Size(12, 12),
+                    image: svgIcon,
+                    imageOffset: new AMap.Pixel(0, 0),
+                    imageSize: new AMap.Size(12, 12)
+                }));
+            }
+            return markerIconCache.get(markerColor);
+        }
+
+        function filterMapPoints(dataFile, data) {
+            let filteredData = data;
+
+            // 仅对国保单位应用朝代筛选，并始终排除近现代点位。
+            if (dataFile === 'map_points.json') {
+                filteredData = data.filter(point => {
+                    if (point.era) {
+                        const era = point.era;
+                        if (era.includes('近代') || era.includes('现代') || era.includes('民国') || era.includes('中华人民共和国')) {
+                            return false;
+                        }
+                        const centuryMatch = era.match(/(\d+)世纪/);
+                        if (centuryMatch) {
+                            const century = parseInt(centuryMatch[1]);
+                            if (century >= 19) {
+                                return false;
+                            }
+                        }
+                        const yearMatch = era.match(/(\d{4})/);
+                        if (yearMatch) {
+                            const year = parseInt(yearMatch[1]);
+                            return year < 1840;
+                        }
+                    }
+                    return true;
+                });
+
+                if (selectedDynasties.length > 0 && !selectedDynasties.includes('全部')) {
+                    filteredData = filteredData.filter(point => {
+                        if (point.era) {
+                            const era = point.era;
+                            return selectedDynasties.some(dynasty => {
+                                switch(dynasty) {
+                                    case '新石器时代':
+                                        return era.includes('新石器');
+                                    case '夏商周':
+                                        return era.includes('夏') || era.includes('商') || era.includes('周') || era.includes('先秦');
+                                    case '秦汉':
+                                        return era.includes('秦') || era.includes('汉');
+                                    case '魏晋南北朝':
+                                        return era.includes('魏晋') || era.includes('南北朝') || era.includes('三国');
+                                    case '隋唐':
+                                        return era.includes('隋') || era.includes('唐');
+                                    case '宋元':
+                                        return era.includes('宋') || era.includes('元');
+                                    case '明清':
+                                        return era.includes('明') || era.includes('清');
+                                    default:
+                                        return false;
+                                }
+                            });
+                        }
+                        return true;
+                    });
+                }
+            }
+
+            // 仅对中国传统村落应用地区筛选。
+            if (dataFile === 'all_villages.json' && selectedRegions.length > 0 && !selectedRegions.includes('全部')) {
+                filteredData = filteredData.filter(point => {
+                    if (point.province) {
+                        return selectedRegions.some(region => {
+                            if (regionProvinceMap[region]) {
+                                return regionProvinceMap[region].includes(point.province);
+                            }
+                            return false;
+                        });
+                    }
+                    return true;
+                });
+            }
+
+            return filteredData;
+        }
+
+        function showLoading() {
+            const loading = document.getElementById('loading');
+            loading.innerHTML = '<div class="loading-spinner"></div><div>正在加载地图...</div>';
+            loading.style.display = 'block';
+        }
+
+        // 分帧创建并挂载原生 Marker，保留每个点的图标、标题与独立点击信息。
+        function renderMarkerBatches(points, markerIcon, requestId, startIndex = 0) {
+            if (requestId !== loadRequestId) return;
+
+            const endIndex = Math.min(startIndex + MARKER_BATCH_SIZE, points.length);
+            const batch = [];
+            for (let index = startIndex; index < endIndex; index++) {
+                const point = points[index];
+                const marker = new AMap.Marker({
+                    position: [point.lng, point.lat],
+                    title: point.name,
+                    icon: markerIcon,
+                    extData: point
+                });
+                marker.on('click', function() {
+                    showInfoWindow(point);
+                });
+                batch.push(marker);
+            }
+
+            if (requestId !== loadRequestId) return;
+            if (batch.length > 0) {
+                currentMarkers.push(...batch);
+                map.add(batch);
+            }
+
+            if (endIndex < points.length) {
+                markerBuildFrame = requestAnimationFrame(function() {
+                    renderMarkerBatches(points, markerIcon, requestId, endIndex);
+                });
+            } else {
+                markerBuildFrame = null;
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
         // 加载地图点位数据
         function loadMapPoints(dataFile) {
-            // 清除现有标记点
+            const requestId = ++loadRequestId;
+
+            if (markerBuildFrame !== null) {
+                cancelAnimationFrame(markerBuildFrame);
+                markerBuildFrame = null;
+            }
             if (currentMarkers.length > 0) {
                 map.remove(currentMarkers);
                 currentMarkers = [];
             }
-            
-            // 显示加载提示
-            document.getElementById('loading').style.display = 'block';
-            
-            // 根据数据文件确定颜色
+            showLoading();
+
             let markerColor = '#d4af37'; // 默认黄色（国保单位）
             if (dataFile === 'village_points.json') {
                 markerColor = '#87CEEB'; // 浅蓝色（"八派"对应省传统村落）
             } else if (dataFile === 'all_villages.json') {
                 markerColor = '#228B22'; // 深绿色（中国传统村落）
             }
-            
-            // 创建SVG图标
-            const svgIcon = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="6" cy="6" r="6" fill="' + markerColor + '" fill-opacity="0.8" stroke="#fff" stroke-width="1"/></svg>')}`;
-            
-            // 加载点聚合插件
-            AMapUI.load(['ui/overlay/SimpleMarker'], function(SimpleMarker) {
-                // 添加时间戳参数以避免浏览器缓存
-                const url = dataFile + '?t=' + new Date().getTime();
-                fetch(url)
-                    .then(response => response.json())
-                    .then(data => {
-                        // 筛选数据（仅对国保单位应用朝代筛选，排除近现代点位）
-                        let filteredData = data;
-                        if (dataFile === 'map_points.json') {
-                            // 始终排除近现代点位（1840年及以后视为近现代）
-                            filteredData = data.filter(point => {
-                                if (point.era) {
-                                    const era = point.era;
-                                    // 检查是否包含近现代关键词
-                                    if (era.includes('近代') || era.includes('现代') || era.includes('民国') || era.includes('中华人民共和国')) {
-                                        return false;
-                                    }
-                                    // 检查是否是20世纪或21世纪（1901年以后）
-                                    const centuryMatch = era.match(/(\d+)世纪/);
-                                    if (centuryMatch) {
-                                        const century = parseInt(centuryMatch[1]);
-                                        // 19世纪及以后（1801年以后）都视为近现代
-                                        if (century >= 19) {
-                                            return false;
-                                        }
-                                    }
-                                    // 提取年份数字
-                                    const yearMatch = era.match(/(\d{4})/);
-                                    if (yearMatch) {
-                                        const year = parseInt(yearMatch[1]);
-                                        // 1840年鸦片战争之后视为近现代，需要排除
-                                        return year < 1840;
-                                    }
-                                }
-                                return true;
-                            });
-                            // 应用朝代筛选
-                            if (selectedDynasties.length > 0 && !selectedDynasties.includes('全部')) {
-                                filteredData = filteredData.filter(point => {
-                                    if (point.era) {
-                                        const era = point.era;
-                                        return selectedDynasties.some(dynasty => {
-                                            switch(dynasty) {
-                                                case '新石器时代':
-                                                    return era.includes('新石器');
-                                                case '夏商周':
-                                                    return era.includes('夏') || era.includes('商') || era.includes('周') || era.includes('先秦');
-                                                case '秦汉':
-                                                    return era.includes('秦') || era.includes('汉');
-                                                case '魏晋南北朝':
-                                                    return era.includes('魏晋') || era.includes('南北朝') || era.includes('三国');
-                                                case '隋唐':
-                                                    return era.includes('隋') || era.includes('唐');
-                                                case '宋元':
-                                                    return era.includes('宋') || era.includes('元');
-                                                case '明清':
-                                                    return era.includes('明') || era.includes('清');
-                                                default:
-                                                    return false;
-                                            }
-                                        });
-                                    }
-                                    return true;
-                                });
-                            }
-                        }
-                        
-                        // 筛选数据（仅对中国传统村落应用地区筛选）
-                        if (dataFile === 'all_villages.json' && selectedRegions.length > 0 && !selectedRegions.includes('全部')) {
-                            filteredData = filteredData.filter(point => {
-                                if (point.province) {
-                                    // 检查省份是否在选中的地区中
-                                    return selectedRegions.some(region => {
-                                        if (regionProvinceMap[region]) {
-                                            return regionProvinceMap[region].includes(point.province);
-                                        }
-                                        return false;
-                                    });
-                                }
-                                return true;
-                            });
-                        }
-                        
-                        // 创建标记点
-                        filteredData.forEach(point => {
-                            const marker = new AMap.Marker({
-                                position: [point.lng, point.lat],
-                                title: point.name,
-                                icon: new AMap.Icon({
-                                    size: new AMap.Size(12, 12),
-                                    image: svgIcon,
-                                    imageOffset: new AMap.Pixel(0, 0),
-                                    imageSize: new AMap.Size(12, 12)
-                                }),
-                                extData: point
-                            });
-                            
-                            // 添加点击事件
-                            marker.on('click', function() {
-                                showInfoWindow(point);
-                            });
-                            
-                            currentMarkers.push(marker);
-                        });
-                        
-                        // 添加标记点到地图
-                        map.add(currentMarkers);
-                        
-                        // 隐藏加载提示
-                        document.getElementById('loading').style.display = 'none';
-                    })
-                    .catch(error => {
-                        console.error('加载点位数据失败:', error);
-                        document.getElementById('loading').innerHTML = '<div style="color: red;">加载点位数据失败</div>';
+
+            getPointData(dataFile)
+                .then(data => {
+                    if (requestId !== loadRequestId) return;
+                    const filteredData = filterMapPoints(dataFile, data);
+                    const markerIcon = getMarkerIcon(markerColor);
+                    markerBuildFrame = requestAnimationFrame(function() {
+                        renderMarkerBatches(filteredData, markerIcon, requestId);
                     });
-            });
+                })
+                .catch(error => {
+                    if (requestId !== loadRequestId) return;
+                    console.error('加载点位数据失败:', error);
+                    document.getElementById('loading').innerHTML = '<div style="color: red;">加载点位数据失败</div>';
+                });
         }
         
         // 显示信息窗口

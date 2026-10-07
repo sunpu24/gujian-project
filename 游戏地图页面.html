@@ -1514,6 +1514,107 @@
     </div>
     
     <script>
+        // 所有主动动画共用一条 RAF 链；任务可独立休眠并按目标帧率执行。
+        const animationScheduler = (() => {
+            const tasks = new Map();
+            let animationFrameId = null;
+
+            function hasActiveTasks() {
+                for (const task of tasks.values()) {
+                    if (task.active) return true;
+                }
+                return false;
+            }
+
+            function schedule() {
+                if (animationFrameId === null && !document.hidden && hasActiveTasks()) {
+                    animationFrameId = requestAnimationFrame(run);
+                }
+            }
+
+            function stopIfIdle() {
+                if (animationFrameId !== null && !hasActiveTasks()) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+            }
+
+            function run(timestamp) {
+                animationFrameId = null;
+                if (document.hidden) return;
+
+                tasks.forEach(task => {
+                    if (!task.active) return;
+                    const isFirstFrame = task.lastFrame === 0;
+                    const elapsed = isFirstFrame ? BASE_FRAME_INTERVAL : timestamp - task.lastFrame;
+                    if (!isFirstFrame && elapsed < task.interval - 1) return;
+
+                    task.lastFrame = timestamp;
+                    if (task.callback(timestamp, elapsed) === false) {
+                        task.active = false;
+                        task.lastFrame = 0;
+                    }
+                });
+
+                schedule();
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                    tasks.forEach(task => { task.lastFrame = 0; });
+                } else {
+                    schedule();
+                }
+            });
+
+            return {
+                add(name, framesPerSecond, callback, active = true) {
+                    tasks.set(name, {
+                        active,
+                        callback,
+                        interval: 1000 / framesPerSecond,
+                        lastFrame: 0
+                    });
+                    schedule();
+                },
+                setActive(name, active = true) {
+                    const task = tasks.get(name);
+                    if (!task) return;
+                    if (active && !task.active) task.lastFrame = 0;
+                    task.active = active;
+                    if (active) {
+                        schedule();
+                    } else {
+                        task.lastFrame = 0;
+                        stopIfIdle();
+                    }
+                }
+            };
+        })();
+
+        const BASE_FRAME_INTERVAL = 1000 / 60;
+        const videosPausedForVisibility = new Set();
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                videosPausedForVisibility.clear();
+                document.querySelectorAll('video').forEach(video => {
+                    if (!video.paused && !video.ended) {
+                        videosPausedForVisibility.add(video);
+                        video.pause();
+                    }
+                });
+                return;
+            }
+
+            videosPausedForVisibility.forEach(video => {
+                if (video.isConnected) video.play().catch(() => {});
+            });
+            videosPausedForVisibility.clear();
+        });
+
         // ========== 1. 核心特效 A：全局流光萤火系统 (Canvas) ==========
         const canvas = document.getElementById('fireflies-canvas');
         const ctx = canvas.getContext('2d');
@@ -1534,15 +1635,15 @@
                 this.fadeRate = Math.random() * 0.02 + 0.005;
                 this.fadingOut = Math.random() > 0.5;
             }
-            update() {
-                this.x += Math.cos(this.ang) * this.v;
-                this.y += Math.sin(this.ang) * this.v;
+            update(frameScale = 1) {
+                this.x += Math.cos(this.ang) * this.v * frameScale;
+                this.y += Math.sin(this.ang) * this.v * frameScale;
                 
                 if(this.fadingOut) {
-                    this.opacity -= this.fadeRate;
+                    this.opacity -= this.fadeRate * frameScale;
                     if(this.opacity < 0) { this.fadingOut = false; this.opacity = 0; }
                 } else {
-                    this.opacity += this.fadeRate;
+                    this.opacity += this.fadeRate * frameScale;
                     if(this.opacity > 1) { this.fadingOut = true; this.opacity = 1; }
                 }
                 
@@ -1565,12 +1666,13 @@
 
         for (let i = 0; i < firefliesCount; i++) fireflies.push(new Firefly());
 
-        function animateFireflies() {
+        function animateFireflies(timestamp, elapsed) {
+            const frameScale = Math.min(3, elapsed / BASE_FRAME_INTERVAL);
             ctx.clearRect(0, 0, width, height);
-            fireflies.forEach(f => { f.update(); f.draw(); });
-            requestAnimationFrame(animateFireflies);
+            fireflies.forEach(f => { f.update(frameScale); f.draw(); });
         }
-        animateFireflies();
+
+        animationScheduler.add('fireflies', 60, animateFireflies);
 
         // ========== 2. 核心特效 B & C：3D 视差追踪 + 电影聚光灯 + 金箔波纹 ==========
         const dimmer = document.getElementById('global-dimmer');
@@ -1582,6 +1684,8 @@
             
             // 保存原始的 transform 值（包括用户设置的自定义缩放）
             const originalTransform = icon.style.transform || '';
+            let hoverFrameId = null;
+            let latestPointerPosition = null;
 
             container.addEventListener('click', (e) => {
                 const ripple = document.createElement('div');
@@ -1590,10 +1694,14 @@
                 setTimeout(() => ripple.remove(), 1000);
             });
 
-            container.addEventListener('mousemove', (e) => {
+            function updateBuildingHover() {
+                hoverFrameId = null;
+                if (!latestPointerPosition) return;
+
+                const { clientX, clientY } = latestPointerPosition;
                 const rect = container.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = clientX - rect.left;
+                const y = clientY - rect.top;
                 const centerX = rect.width / 2;
                 const centerY = rect.height / 2;
 
@@ -1610,7 +1718,20 @@
                 if(bubble) bubble.style.transform = `translateX(-50%) translateY(-25px) translateZ(30px) rotateX(${rotateX * 0.5}deg) rotateY(${rotateY * 0.5}deg)`;
                 if(label) label.style.transform = `translateX(-50%) translateY(-25px) translateZ(30px) rotateX(${rotateX * 0.5}deg) rotateY(${rotateY * 0.5}deg)`;
 
-                dimmer.style.background = `radial-gradient(circle at ${e.clientX}px ${e.clientY}px, transparent 5%, rgba(10, 5, 0, 0.85) 60%)`;
+                dimmer.style.background = `radial-gradient(circle at ${clientX}px ${clientY}px, transparent 5%, rgba(10, 5, 0, 0.85) 60%)`;
+            }
+
+            container.addEventListener('mousemove', (e) => {
+                latestPointerPosition = { clientX: e.clientX, clientY: e.clientY };
+                if (hoverFrameId === null) {
+                    hoverFrameId = requestAnimationFrame(() => {
+                        if (document.hidden) {
+                            hoverFrameId = null;
+                            return;
+                        }
+                        updateBuildingHover();
+                    });
+                }
             });
 
             container.addEventListener('mouseenter', () => {
@@ -1618,6 +1739,9 @@
             });
 
             container.addEventListener('mouseleave', () => {
+                if (hoverFrameId !== null) cancelAnimationFrame(hoverFrameId);
+                hoverFrameId = null;
+                latestPointerPosition = null;
                 icon.style.transition = 'all 0.6s cubic-bezier(0.2, 1.2, 0.4, 1)';
                 icon.style.transform = originalTransform;
                 icon.style.filter = `drop-shadow(0 4px 6px rgba(101, 67, 33, 0.3)) brightness(1)`;
@@ -1645,6 +1769,8 @@
                 maxTranslateX = Math.max(0, mapLayer.offsetWidth - mapViewport.clientWidth);
                 targetTranslateX = Math.max(-maxTranslateX, Math.min(0, targetTranslateX));
                 currentTranslateX = Math.max(-maxTranslateX, Math.min(0, currentTranslateX));
+                mapLayer.style.transform = `translateX(${currentTranslateX}px)`;
+                scheduleMapAnimation();
             }
 
             updateMapBounds();
@@ -1660,13 +1786,30 @@
             let scrollDirection = -1; 
 
             document.querySelectorAll('.building-container').forEach(el => {
-                el.addEventListener('mouseenter', () => isHoveringElement = true);
-                el.addEventListener('mouseleave', () => isHoveringElement = false);
+                el.addEventListener('mouseenter', () => {
+                    isHoveringElement = true;
+                });
+                el.addEventListener('mouseleave', () => {
+                    isHoveringElement = false;
+                    scheduleMapAnimation();
+                });
             });
 
-            function animateMap() {
+            function mapNeedsAnimation() {
+                const isSettling = Math.abs(targetTranslateX - currentTranslateX) > 0.05;
+                const canAutoMove = !isDraggingMap && !isHoveringElement && maxTranslateX > 0;
+                return isSettling || canAutoMove;
+            }
+
+            function scheduleMapAnimation() {
+                animationScheduler.setActive('map', mapNeedsAnimation());
+            }
+
+            function animateMap(timestamp, elapsed) {
+                const frameScale = Math.min(3, elapsed / BASE_FRAME_INTERVAL);
+
                 if (!isDraggingMap && !isHoveringElement) {
-                    targetTranslateX += autoMoveSpeed * scrollDirection;
+                    targetTranslateX += autoMoveSpeed * scrollDirection * frameScale;
                     if (targetTranslateX <= -maxTranslateX) {
                         targetTranslateX = -maxTranslateX;
                         scrollDirection = 1;
@@ -1676,14 +1819,20 @@
                     }
                 }
 
-                currentTranslateX += (targetTranslateX - currentTranslateX) * 0.1;
+                const easing = 1 - Math.pow(0.9, frameScale);
+                currentTranslateX += (targetTranslateX - currentTranslateX) * easing;
+                if (Math.abs(targetTranslateX - currentTranslateX) <= 0.05) {
+                    currentTranslateX = targetTranslateX;
+                }
                 if (currentTranslateX > 0) currentTranslateX = 0;
                 if (currentTranslateX < -maxTranslateX) currentTranslateX = -maxTranslateX;
                 mapLayer.style.transform = `translateX(${currentTranslateX}px)`;
-                
-                requestAnimationFrame(animateMap);
+
+                return mapNeedsAnimation();
             }
-            requestAnimationFrame(animateMap); 
+
+            animationScheduler.add('map', 60, animateMap, false);
+            scheduleMapAnimation();
 
             let activePointerId = null;
 
@@ -1695,6 +1844,7 @@
                 mapViewport.style.cursor = 'grabbing';
                 startMouseX = e.clientX;
                 startTranslateX = targetTranslateX;
+                scheduleMapAnimation();
                 if (mapViewport.setPointerCapture) {
                     try {
                         mapViewport.setPointerCapture(e.pointerId);
@@ -1712,6 +1862,7 @@
                 targetTranslateX = startTranslateX + dx;
                 if (targetTranslateX > 0) targetTranslateX = 0;
                 if (targetTranslateX < -maxTranslateX) targetTranslateX = -maxTranslateX;
+                scheduleMapAnimation();
             });
 
             function finishMapDrag(e) {
@@ -1719,6 +1870,7 @@
                 isDraggingMap = false;
                 activePointerId = null;
                 mapViewport.style.cursor = 'grab';
+                scheduleMapAnimation();
             }
 
             mapViewport.addEventListener('pointerup', finishMapDrag);
@@ -1730,6 +1882,7 @@
                 targetTranslateX -= e.deltaY;
                 if (targetTranslateX > 0) targetTranslateX = 0;
                 if (targetTranslateX < -maxTranslateX) targetTranslateX = -maxTranslateX;
+                scheduleMapAnimation();
             }, { passive: false });
             
             const videoOverlay = document.getElementById('videoOverlay');
@@ -1739,7 +1892,11 @@
                 if (source) {
                     source.src = source.dataset.src;
                     introVideo.load();
-                    introVideo.play().catch(() => {});
+                    if (document.hidden) {
+                        videosPausedForVisibility.add(introVideo);
+                    } else {
+                        introVideo.play().catch(() => {});
+                    }
                 }
                 introVideo.addEventListener('ended', function() { videoOverlay.style.display = 'none'; });
                 introVideo.addEventListener('error', function() { videoOverlay.style.display = 'none'; });
@@ -1777,9 +1934,9 @@
                 this.maxLife = 120 + Math.random() * 100;
                 this.ellipseRatio = 0.3 + Math.random() * 0.4;
             }
-            update() {
-                this.life++;
-                this.radius += this.speed;
+            update(frameScale = 1) {
+                this.life += frameScale;
+                this.radius += this.speed * frameScale;
                 const progress = this.life / this.maxLife;
                 if (progress < 0.3) {
                     this.currentOpacity = this.opacity * (progress / 0.3);
@@ -1810,22 +1967,51 @@
             }
         }
 
-        setInterval(() => {
+        let waterSpawnTimer = null;
+
+        function scheduleWaterRippleSpawn() {
+            if (waterSpawnTimer !== null || document.hidden) return;
+            waterSpawnTimer = setTimeout(() => {
+                waterSpawnTimer = null;
+                if (document.hidden) return;
+
+                spawnWaterRipple();
+                scheduleWaterRippleSpawn();
+            }, 400);
+        }
+
+        function spawnWaterRipple() {
             if (waterRipples.length < maxWaterRipples && Math.random() > 0.3) {
                 waterRipples.push(new WaterRipple());
             }
-        }, 400);
-
-        function animateWaterRipples() {
-            waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
-            waterRipples = waterRipples.filter(r => {
-                const alive = r.update();
-                if (alive) r.draw(waterCtx);
-                return alive;
-            });
-            requestAnimationFrame(animateWaterRipples);
         }
-        animateWaterRipples();
+
+        function animateWaterRipples(timestamp, elapsed) {
+            const frameScale = Math.min(3, elapsed / BASE_FRAME_INTERVAL);
+            waterCtx.clearRect(0, 0, waterCanvas.width, waterCanvas.height);
+            let aliveCount = 0;
+            for (let i = 0; i < waterRipples.length; i++) {
+                const ripple = waterRipples[i];
+                if (ripple.update(frameScale)) {
+                    ripple.draw(waterCtx);
+                    waterRipples[aliveCount++] = ripple;
+                }
+            }
+            waterRipples.length = aliveCount;
+        }
+
+        function updateWaterSpawnLifecycle() {
+            if (!document.hidden) {
+                scheduleWaterRippleSpawn();
+                return;
+            }
+            if (waterSpawnTimer !== null) clearTimeout(waterSpawnTimer);
+            waterSpawnTimer = null;
+        }
+
+        document.addEventListener('visibilitychange', updateWaterSpawnLifecycle);
+        updateWaterSpawnLifecycle();
+        animationScheduler.add('water', 60, animateWaterRipples);
         
         // 获取DOM元素
         const overlay = document.getElementById('overlay');
@@ -2362,6 +2548,14 @@
         });
         
         // 显示建筑弹窗函数
+        function releaseVideo(video) {
+            if (!video) return;
+            videosPausedForVisibility.delete(video);
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        }
+
         function showBuildingPopup(buildingName, fromVideo = false) {
             // 更新触发框内容
             boxTitle.textContent = buildingData[buildingName].title;
@@ -2387,6 +2581,7 @@
                 const triggerBoxLeft = document.getElementById('triggerBoxLeft');
                 if (triggerBoxLeft) {
                     // 清空3D预留位置的内容
+                    releaseVideo(triggerBoxLeft.querySelector('video'));
                     triggerBoxLeft.innerHTML = '';
                     
                     // 创建视频元素
@@ -2428,109 +2623,40 @@
                     
                     // 将视频添加到3D预留位置
                     triggerBoxLeft.appendChild(video);
+                    if (document.hidden) {
+                        videosPausedForVisibility.add(video);
+                        video.pause();
+                    }
                     
                     // 视频播放结束后，保留最后一帧
-                    if (buildingName === '上海石库门') {
-                        // 海派建筑：视频播放到85%时就停止并截取帧
-                        video.addEventListener('timeupdate', function() {
-                            if (video.currentTime / video.duration >= 0.85) {
-                                video.pause();
-                                
-                                // 创建canvas来截取视频当前帧
-                                const canvas = document.createElement('canvas');
-                                canvas.width = video.videoWidth;
-                                canvas.height = video.videoHeight;
-                                const ctx = canvas.getContext('2d');
-                                
-                                // 将视频当前帧绘制到canvas上
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                
-                                // 将canvas转换为图片
-                                const imageData = canvas.toDataURL('image/png');
-                                
-                                // 创建图片元素
-                                const img = document.createElement('img');
-                                img.src = imageData;
-                                img.style.width = '100%';
-                                img.style.height = '100%';
-                                img.style.objectFit = 'cover';
-                                img.style.objectPosition = '55% center'; // 海派建筑：图片中心更靠右
-                                
-                                // 替换视频元素为图片
-                                triggerBoxLeft.innerHTML = '';
-                                triggerBoxLeft.appendChild(img);
-                            }
-                        });
-                    } else if (buildingName === '福建土楼') {
-                        // 闽派建筑：视频播放到85%时就停止并截取帧
-                        video.addEventListener('timeupdate', function() {
-                            if (video.currentTime / video.duration >= 0.85) {
-                                video.pause();
-                                
-                                // 创建canvas来截取视频当前帧
-                                const canvas = document.createElement('canvas');
-                                canvas.width = video.videoWidth;
-                                canvas.height = video.videoHeight;
-                                const ctx = canvas.getContext('2d');
-                                
-                                // 将视频当前帧绘制到canvas上
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                
-                                // 将canvas转换为图片
-                                const imageData = canvas.toDataURL('image/png');
-                                
-                                // 创建图片元素
-                                const img = document.createElement('img');
-                                img.src = imageData;
-                                img.style.width = '100%';
-                                img.style.height = '100%';
-                                img.style.objectFit = 'cover';
-                                img.style.objectPosition = '59% center'; // 闽派建筑：图片中心更靠右
-                                
-                                // 替换视频元素为图片
-                                triggerBoxLeft.innerHTML = '';
-                                triggerBoxLeft.appendChild(img);
-                            }
-                        });
-                    } else {
-                        // 其他建筑：视频播放到95%时就停止并截取帧
-                        video.addEventListener('timeupdate', function() {
-                            if (video.currentTime / video.duration >= 0.95) {
-                                video.pause();
-                                
-                                // 创建canvas来截取视频当前帧
-                                const canvas = document.createElement('canvas');
-                                canvas.width = video.videoWidth;
-                                canvas.height = video.videoHeight;
-                                const ctx = canvas.getContext('2d');
-                                
-                                // 将视频当前帧绘制到canvas上
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                
-                                // 将canvas转换为图片
-                                const imageData = canvas.toDataURL('image/png');
-                                
-                                // 创建图片元素
-                                const img = document.createElement('img');
-                                img.src = imageData;
-                                img.style.width = '100%';
-                                img.style.height = '100%';
-                                img.style.objectFit = 'cover';
-                                // 根据建筑类型调整图片位置
-                                if (buildingName === '山西大院') {
-                                    img.style.objectPosition = '55% center'; // 晋派建筑：图片中心更靠右
-                                } else if (buildingName === '川渝吊脚楼') {
-                                    img.style.objectPosition = '45% center'; // 川派建筑：视频中心较大左移，再右移一部分
-                                } else {
-                                    img.style.objectPosition = '55% center'; // 其他建筑：图片中心更靠右
-                                }
-                                
-                                // 替换视频元素为图片
-                                triggerBoxLeft.innerHTML = '';
-                                triggerBoxLeft.appendChild(img);
-                            }
-                        });
-                    }
+                    const stopRatio = (buildingName === '上海石库门' || buildingName === '福建土楼') ? 0.85 : 0.95;
+                    let frameCaptured = false;
+
+                    video.addEventListener('timeupdate', function retainFinalFrame() {
+                        if (frameCaptured || !Number.isFinite(video.duration) || video.duration <= 0) return;
+                        if (video.currentTime / video.duration < stopRatio) return;
+
+                        frameCaptured = true;
+                        video.pause();
+
+                        // 直接保留像素 Canvas，避免同步 PNG 编码造成主线程长任务。
+                        const frameCanvas = document.createElement('canvas');
+                        frameCanvas.width = video.videoWidth;
+                        frameCanvas.height = video.videoHeight;
+                        const frameContext = frameCanvas.getContext('2d');
+                        if (!frameContext || !frameCanvas.width || !frameCanvas.height) return;
+                        frameContext.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+
+                        frameCanvas.style.width = '100%';
+                        frameCanvas.style.height = '100%';
+                        frameCanvas.style.objectFit = 'cover';
+                        frameCanvas.style.objectPosition = video.style.objectPosition;
+
+                        if (video.parentNode === triggerBoxLeft) {
+                            triggerBoxLeft.replaceChild(frameCanvas, video);
+                            releaseVideo(video);
+                        }
+                    });
                 }
             } else {
                 // 普通显示，从右侧滑入
@@ -2604,30 +2730,26 @@
             // 将视频当前帧绘制到canvas上，保持正确的宽高比并居中
             ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
             
-            // 将canvas转换为图片
-            const imageData = canvas.toDataURL('image/png');
-            
-            // 在3D预留位置显示截取的图片
-            // 清空3D预留位置的内容
+            // Canvas 本身即可保留静态帧，无需同步编码成 PNG。
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.objectFit = 'cover';
+            canvas.style.objectPosition = 'center';
             triggerBoxLeft.innerHTML = '';
-            
-            // 创建图片元素
-            const img = document.createElement('img');
-            img.src = imageData;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-            img.style.objectPosition = 'center';
-            
-            // 将图片添加到3D预留位置
-            triggerBoxLeft.appendChild(img);
+            triggerBoxLeft.appendChild(canvas);
         }
         
         // 放大镜功能
-        imageArea.addEventListener('mousemove', function(e) {
-            const rect = this.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+        let magnifierFrameId = null;
+        let latestMagnifierPosition = null;
+
+        function updateMagnifier() {
+            magnifierFrameId = null;
+            if (!latestMagnifierPosition) return;
+
+            const rect = imageArea.getBoundingClientRect();
+            const x = latestMagnifierPosition.clientX - rect.left;
+            const y = latestMagnifierPosition.clientY - rect.top;
             
             // 计算鼠标在图片上的位置
             const imgRect = buildingImage.getBoundingClientRect();
@@ -2653,10 +2775,26 @@
                 // 鼠标移出图片范围，隐藏放大镜
                 magnifier.style.display = 'none';
             }
+        }
+
+        imageArea.addEventListener('mousemove', function(e) {
+            latestMagnifierPosition = { clientX: e.clientX, clientY: e.clientY };
+            if (magnifierFrameId === null) {
+                magnifierFrameId = requestAnimationFrame(() => {
+                    if (document.hidden) {
+                        magnifierFrameId = null;
+                        return;
+                    }
+                    updateMagnifier();
+                });
+            }
         });
         
         // 鼠标离开容器时隐藏放大镜
         imageArea.addEventListener('mouseleave', function() {
+            if (magnifierFrameId !== null) cancelAnimationFrame(magnifierFrameId);
+            magnifierFrameId = null;
+            latestMagnifierPosition = null;
             magnifier.style.display = 'none';
         });
         
@@ -2679,11 +2817,10 @@
             textArea.innerHTML = '';
 
             // 关闭弹窗时停止播放视频，并隐藏拨云特效图层
-            const buildingVideo = document.getElementById('buildingVideo');
+            const buildingVideo = document.querySelector('#triggerBoxLeft video');
             if(buildingVideo) {
                 buildingVideo.classList.remove('revealed');
-                buildingVideo.pause();
-                buildingVideo.src = '';
+                releaseVideo(buildingVideo);
             }
             const cloudParting = document.getElementById('cloudParting');
             if (cloudParting) {
@@ -2694,6 +2831,7 @@
         
         // 完成任务按钮事件
         completeBtn.addEventListener('click', function() {
+            releaseVideo(document.querySelector('#triggerBoxLeft video'));
             // 直接关闭触发框，因为任务已经在点击气泡时完成
             overlay.classList.remove('active');
             triggerBox.classList.remove('active');
@@ -2735,6 +2873,7 @@
         
         // 点击遮罩层关闭
         overlay.addEventListener('click', function() {
+            releaseVideo(document.querySelector('#triggerBoxLeft video'));
             overlay.classList.remove('active');
             triggerBox.classList.remove('active');
             currentBuilding = null;
@@ -2776,6 +2915,7 @@
         
         let mouseX = 0, mouseY = 0;
         let circleX = 0, circleY = 0;
+        const mouseFollowEpsilon = 0.1;
         
         document.addEventListener('mousemove', (e) => {
             mouseX = e.clientX;
@@ -2784,6 +2924,7 @@
             // 更新小圆点位置（立即跟随）
             mouseDot.style.left = mouseX + 'px';
             mouseDot.style.top = mouseY + 'px';
+            startCircleAnimation();
         });
         
         // 圆圈动画循环
@@ -2794,10 +2935,25 @@
             
             mouseCircle.style.left = circleX + 'px';
             mouseCircle.style.top = circleY + 'px';
-            
-            requestAnimationFrame(animateCircle);
+
+            if (Math.abs(mouseX - circleX) > mouseFollowEpsilon || Math.abs(mouseY - circleY) > mouseFollowEpsilon) {
+                return true;
+            } else {
+                circleX = mouseX;
+                circleY = mouseY;
+                mouseCircle.style.left = circleX + 'px';
+                mouseCircle.style.top = circleY + 'px';
+                return false;
+            }
         }
-        animateCircle();
+
+        function startCircleAnimation() {
+            const needsUpdate = Math.abs(mouseX - circleX) > mouseFollowEpsilon ||
+                Math.abs(mouseY - circleY) > mouseFollowEpsilon;
+            animationScheduler.setActive('mouse-circle', needsUpdate);
+        }
+
+        animationScheduler.add('mouse-circle', 60, animateCircle, false);
         
         // ========== 悬浮球JS ==========
         const floatingBall = document.getElementById('floatingBall');

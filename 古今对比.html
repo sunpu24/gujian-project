@@ -1109,33 +1109,54 @@
                 let mouseY = 0;
                 let circleX = 0;
                 let circleY = 0;
+                let dotNeedsUpdate = false;
+                let followerFrameId = null;
+
+                function scheduleFollowerFrame() {
+                    if (followerFrameId !== null || document.hidden || mouseFollower.style.display === 'none') return;
+                    followerFrameId = requestAnimationFrame(animate);
+                }
                 
                 // 鼠标移动事件
                 document.addEventListener('mousemove', (e) => {
                     mouseX = e.clientX;
                     mouseY = e.clientY;
-                    
-                    // 直接更新小圆点位置
-                    mouseDot.style.left = mouseX + 'px';
-                    mouseDot.style.top = mouseY + 'px';
-                });
+                    dotNeedsUpdate = true;
+                    scheduleFollowerFrame();
+                }, { passive: true });
                 
                 // 动画循环，实现圆圈追逐圆点
                 function animate() {
+                    followerFrameId = null;
+                    if (document.hidden || mouseFollower.style.display === 'none') return;
+
+                    if (dotNeedsUpdate) {
+                        mouseDot.style.left = mouseX + 'px';
+                        mouseDot.style.top = mouseY + 'px';
+                        dotNeedsUpdate = false;
+                    }
+
                     // 计算圆圈到圆点的距离
                     const dx = mouseX - circleX;
                     const dy = mouseY - circleY;
                     
                     // 平滑追逐效果
-                    circleX += dx * 0.1;
-                    circleY += dy * 0.1;
+                    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) {
+                        circleX = mouseX;
+                        circleY = mouseY;
+                    } else {
+                        circleX += dx * 0.1;
+                        circleY += dy * 0.1;
+                    }
                     
                     // 更新圆圈位置
                     mouseCircle.style.left = circleX + 'px';
                     mouseCircle.style.top = circleY + 'px';
                     
-                    // 继续动画
-                    requestAnimationFrame(animate);
+                    // 追上鼠标后停止 RAF，下一次移动时再启动。
+                    if (circleX !== mouseX || circleY !== mouseY || dotNeedsUpdate) {
+                        scheduleFollowerFrame();
+                    }
                 }
                 
                 // 鼠标点击事件
@@ -1146,8 +1167,14 @@
                     }, 150);
                 });
                 
-                // 启动动画
-                animate();
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden && followerFrameId !== null) {
+                        cancelAnimationFrame(followerFrameId);
+                        followerFrameId = null;
+                    } else if (!document.hidden && (circleX !== mouseX || circleY !== mouseY || dotNeedsUpdate)) {
+                        scheduleFollowerFrame();
+                    }
+                });
             }
         })();
         
@@ -2148,6 +2175,12 @@
         let currentChartIndex = 0;
         let charts = [heatmapChart, barChart, polarChart, pixelChart, digitalChart, null];
         const chartContainers = document.querySelectorAll('.chart-container');
+        let chartSwitchVersion = 0;
+        let chartAnimationFrameId = null;
+        let chartAnimationState = null;
+        let chartStartTimerId = null;
+        let chartResizeTimerId = null;
+        let chartResizeFrameId = null;
         
         // 切换到指定图表
         function switchToChart(index) {
@@ -2162,64 +2195,97 @@
         }
         
         // 为图表添加透明度动画效果
-        function addOpacityAnimation(chart, option) {
-            // 先设置所有元素为透明
-            if (option.series) {
-                option.series.forEach(series => {
+        function setChartAnimationPaused(chart, paused) {
+            if (!chart || typeof chart.getZr !== 'function') return;
+            const animation = chart.getZr().animation;
+            const method = paused ? 'pause' : 'resume';
+            if (animation && typeof animation[method] === 'function') animation[method]();
+        }
+
+        function syncChartAnimationVisibility() {
+            charts.forEach((chart, index) => {
+                setChartAnimationPaused(chart, document.hidden || index !== currentChartIndex);
+            });
+        }
+
+        function createOpacityUpdate(option, opacity) {
+            return {
+                series: (option.series || []).map(series => {
                     if (series.type === 'line') {
-                        series.lineStyle = series.lineStyle || {};
-                        series.lineStyle.opacity = 0;
-                        series.itemStyle = series.itemStyle || {};
-                        series.itemStyle.opacity = 0;
-                    } else if (series.type === 'bar') {
-                        series.itemStyle = series.itemStyle || {};
-                        series.itemStyle.opacity = 0;
+                        return {
+                            lineStyle: { opacity },
+                            itemStyle: { opacity }
+                        };
                     }
-                });
+                    if (series.type === 'bar') {
+                        return { itemStyle: { opacity } };
+                    }
+                    return {};
+                })
+            };
+        }
+
+        function runOpacityAnimationFrame(timestamp) {
+            chartAnimationFrameId = null;
+            const state = chartAnimationState;
+            if (!state || state.version !== chartSwitchVersion || document.hidden) return;
+
+            if (state.lastTimestamp === null) {
+                state.lastTimestamp = timestamp;
+            } else {
+                state.opacity = Math.min(1, state.opacity + Math.min(timestamp - state.lastTimestamp, 100) / 500);
+                state.lastTimestamp = timestamp;
+                state.chart.setOption(createOpacityUpdate(state.option, state.opacity));
             }
-            
-            // 设置图表选项
+
+            if (state.opacity < 1) {
+                chartAnimationFrameId = requestAnimationFrame(runOpacityAnimationFrame);
+            } else {
+                chartAnimationState = null;
+            }
+        }
+
+        function cancelChartTransition() {
+            if (chartStartTimerId !== null) {
+                clearTimeout(chartStartTimerId);
+                chartStartTimerId = null;
+            }
+            if (chartResizeTimerId !== null) {
+                clearTimeout(chartResizeTimerId);
+                chartResizeTimerId = null;
+            }
+            if (chartAnimationFrameId !== null) {
+                cancelAnimationFrame(chartAnimationFrameId);
+                chartAnimationFrameId = null;
+            }
+            chartAnimationState = null;
+        }
+
+        function addOpacityAnimation(chart, option, version) {
             chart.setOption(option);
-            
-            // 逐渐增加透明度
-            let opacity = 0;
-            const interval = setInterval(() => {
-                opacity += 0.1;
-                if (opacity >= 1) {
-                    opacity = 1;
-                    clearInterval(interval);
-                }
-                
-                // 更新透明度
-                const updateOption = {
-                    series: option.series.map(series => {
-                        if (series.type === 'line') {
-                            return {
-                                lineStyle: {
-                                    opacity: opacity
-                                },
-                                itemStyle: {
-                                    opacity: opacity
-                                }
-                            };
-                        } else if (series.type === 'bar') {
-                            return {
-                                itemStyle: {
-                                    opacity: opacity
-                                }
-                            };
-                        }
-                        return {};
-                    })
-                };
-                chart.setOption(updateOption);
-            }, 50);
+            if (!option.series || !option.series.some(series => series.type === 'line' || series.type === 'bar')) return;
+
+            chart.setOption(createOpacityUpdate(option, 0));
+            chartAnimationState = {
+                chart,
+                option,
+                version,
+                opacity: 0,
+                lastTimestamp: null
+            };
+            if (!document.hidden) {
+                chartAnimationFrameId = requestAnimationFrame(runOpacityAnimationFrame);
+            }
         }
         
         // 切换图表函数
         function switchChart(index) {
+            if (!Number.isInteger(index) || index < 0 || index >= chartContainers.length) return;
+            const version = ++chartSwitchVersion;
+            cancelChartTransition();
+
             // 隐藏所有图表
-            chartContainers.forEach((container, i) => {
+            chartContainers.forEach((container) => {
                 container.classList.remove('active');
             });
             
@@ -2228,56 +2294,25 @@
             
             // 先显示图表容器，再触发动画
             chartContainers[index].classList.add('active');
-            
-            // 触发当前图表的动画
-            if (index === 0) { // 热力图索引
-                heatmapChart.clear();
-                setTimeout(() => {
-                    addOpacityAnimation(heatmapChart, heatmapOption);
-                    // 调整图表大小
-                    setTimeout(() => {
-                        heatmapChart.resize();
-                    }, 200);
-                }, 100);
-            } else if (index === 1) { // 柱状图索引
-                barChart.clear();
-                setTimeout(() => {
-                    addOpacityAnimation(barChart, barOption);
-                    // 调整图表大小
-                    setTimeout(() => {
-                        barChart.resize();
-                    }, 200);
-                }, 100);
-            } else if (index === 2) { // 堆叠图索引
-                polarChart.clear();
-                setTimeout(() => {
-                    addOpacityAnimation(polarChart, polarOption);
-                    // 调整图表大小
-                    setTimeout(() => {
-                        polarChart.resize();
-                    }, 200);
-                }, 100);
-            } else if (index === 3) { // 折线图索引
-                pixelChart.clear();
-                setTimeout(() => {
-                    addOpacityAnimation(pixelChart, pixelOption);
-                    // 调整图表大小
-                    setTimeout(() => {
-                        pixelChart.resize();
-                    }, 200);
-                }, 100);
-            } else if (index === 4) { // 建筑数字化落地量图表索引
-                digitalChart.clear();
-                setTimeout(() => {
-                    addOpacityAnimation(digitalChart, digitalOption);
-                    // 调整图表大小
-                    setTimeout(() => {
-                        digitalChart.resize();
-                    }, 200);
-                }, 100);
-            } else if (index === 5) { // 视频展示索引
-                // 视频部分不需要ECharts图表，直接显示
-            }
+
+            const videoPlayer = document.getElementById('videoPlayer');
+            if (index !== 5 && videoPlayer && !videoPlayer.paused) videoPlayer.pause();
+
+            const options = [heatmapOption, barOption, polarOption, pixelOption, digitalOption];
+            const activeChart = charts[index];
+            syncChartAnimationVisibility();
+            if (!activeChart) return;
+
+            activeChart.clear();
+            chartStartTimerId = setTimeout(() => {
+                chartStartTimerId = null;
+                if (version !== chartSwitchVersion || currentChartIndex !== index) return;
+                addOpacityAnimation(activeChart, options[index], version);
+                chartResizeTimerId = setTimeout(() => {
+                    chartResizeTimerId = null;
+                    if (version === chartSwitchVersion && currentChartIndex === index) activeChart.resize();
+                }, 200);
+            }, 100);
         }
         
         // 绑定左右按钮事件
@@ -2314,11 +2349,28 @@
             }
         });
         
-        // 响应式处理
+        // 响应式处理：同一帧只调整一次当前可见图表。
         window.addEventListener('resize', function() {
-            const activeChart = charts[currentChartIndex];
-            if (activeChart && typeof activeChart.resize === 'function') {
-                activeChart.resize();
+            if (chartResizeFrameId !== null) return;
+            chartResizeFrameId = requestAnimationFrame(() => {
+                chartResizeFrameId = null;
+                const activeChart = charts[currentChartIndex];
+                if (activeChart && typeof activeChart.resize === 'function') activeChart.resize();
+            });
+        });
+
+        document.addEventListener('visibilitychange', function() {
+            syncChartAnimationVisibility();
+            const videoPlayer = document.getElementById('videoPlayer');
+            if (document.hidden) {
+                if (chartAnimationFrameId !== null) {
+                    cancelAnimationFrame(chartAnimationFrameId);
+                    chartAnimationFrameId = null;
+                }
+                if (videoPlayer && !videoPlayer.paused) videoPlayer.pause();
+            } else if (chartAnimationState && chartAnimationFrameId === null) {
+                chartAnimationState.lastTimestamp = null;
+                chartAnimationFrameId = requestAnimationFrame(runOpacityAnimationFrame);
             }
         });
         

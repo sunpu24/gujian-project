@@ -741,42 +741,47 @@
             const loadingText = document.getElementById('loading-text');
             const readyBtn = document.getElementById('ready-btn');
             
-            // 模拟加载进度
-            let progress = 0;
-            const maxProgress = 100;
-            
-            // 加载进度更新函数
-            function updateProgress() {
-                // 随机增加进度，模拟真实加载
-                progress += Math.random() * 15;
-                if (progress > maxProgress) {
-                    progress = maxProgress;
-                }
-                
-                // 更新进度条
-                loadingBar.style.width = `${progress}%`;
-                
-                // 更新加载文字
-                if (progress < 30) {
-                    loadingText.textContent = '正在初始化...';
-                } else if (progress < 60) {
-                    loadingText.textContent = '正在加载卡牌资源...';
-                } else if (progress < 90) {
-                    loadingText.textContent = '正在准备摄像头...';
-                    // 手势模型在真正进入抽卡页面时再初始化，避免加载页被第三方模型阻塞。
-                } else {
-                    loadingText.textContent = '加载完成';
-                }
-                
-                // 如果加载完成，显示准备好了按钮和弹窗
-                if (progress >= maxProgress) {
-                    setTimeout(() => {
-                        readyBtn.style.display = 'block';
-                    }, 500);
-                } else {
-                    // 继续更新进度
-                    setTimeout(updateProgress, Math.random() * 500 + 200);
-                }
+            // Track actual card-image fetches instead of making the visitor
+            // wait for a random timer. The browser cache is then reused by the
+            // draw page; failures do not block the guide or fallback controls.
+            const cardAssets = [
+                '京back.png', '粤back.png', '徽back.png', '苏back.png',
+                '晋back.png', '闽back.png', '海back.png', '川back.png',
+                '京front.webp', '粤front.png', '徽front.png', '苏front.png',
+                '晋front.png', '闽front.png', '海front.png', '川front.png'
+            ];
+
+            function preloadCardAssets() {
+                let completed = 0;
+                loadingText.textContent = '正在加载卡牌资源...';
+
+                const updateProgress = function () {
+                    completed += 1;
+                    const progress = Math.round((completed / cardAssets.length) * 100);
+                    loadingBar.style.width = `${progress}%`;
+                    loadingText.textContent = progress < 100 ? `正在加载卡牌资源... ${progress}%` : '加载完成';
+                };
+
+                return Promise.allSettled(cardAssets.map(function (src) {
+                    return new Promise(function (resolve) {
+                        const image = new Image();
+                        let settled = false;
+                        const finish = function () {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timeoutId);
+                            image.onload = null;
+                            image.onerror = null;
+                            updateProgress();
+                            resolve();
+                        };
+                        const timeoutId = setTimeout(finish, 12000);
+                        image.decoding = 'async';
+                        image.onload = finish;
+                        image.onerror = finish;
+                        image.src = src;
+                    });
+                }));
             }
             
             // 跳转到操作指南页面
@@ -788,8 +793,11 @@
                 readyBtn.addEventListener('click', goToGuidePage);
             }
             
-            // 启动加载进度更新
-            updateProgress();
+            // Start real preloading immediately. The guide remains available
+            // even if a particular image is unavailable.
+            preloadCardAssets().finally(function () {
+                readyBtn.style.display = 'block';
+            });
         })();
         
         // 进入体验按钮 → 跳转到抽卡页面

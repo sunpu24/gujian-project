@@ -17,9 +17,6 @@
     <title>寻韵古建-观数</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
         /* ========== 简化二次页面样式 ========== */
         :root {
@@ -6325,15 +6322,6 @@
                 }
             }
             
-            // 窗口大小变化时调整图表
-            window.addEventListener('resize', function() {
-                if (leftTopChart) leftTopChart.resize();
-                if (leftBottomChart) leftBottomChart.resize();
-                if (rightTopChart) rightTopChart.resize();
-                if (rightBottomChart) rightBottomChart.resize();
-                if (bottomChart) bottomChart.resize();
-            });
-            
             // 为悬浮触发小圆圈添加事件监听器
             function bindIndexTrigger() {
 
@@ -6453,14 +6441,17 @@
                 bindIndexButtons();
             });
             
-            // 在切换3D模型显示时重新绑定事件，确保按钮始终可用
+            // 合并同一帧内的 resize，避免重复布局和重复调整同一图表。
+            let resizeFrameId = null;
             window.addEventListener('resize', function() {
-                bindCloseModelBtn();
-                bindIndexButtons();
-                update3DRendererSize();
-                document.querySelectorAll('.chart-container').forEach((chartElement) => {
-                    const chart = echarts.getInstanceByDom(chartElement);
-                    if (chart) chart.resize();
+                if (resizeFrameId !== null) return;
+                resizeFrameId = requestAnimationFrame(() => {
+                    resizeFrameId = null;
+                    update3DRendererSize();
+                    [leftTopChart, leftBottomChart, rightTopChart, rightBottomChart, bottomChart]
+                        .forEach((chart) => {
+                            if (chart) chart.resize();
+                        });
                 });
             });
             
@@ -6507,6 +6498,113 @@
             let scene, camera, renderer, controls, model;
             let animationFrameId = null;
             let modelLoadToken = 0;
+            let modelViewToken = 0;
+            let modelDependencyLoadFailed = false;
+            let controlsInteracting = false;
+            let renderRequested = false;
+            let lastRenderTime = 0;
+            let threeDependenciesPromise = null;
+            const THREE_FRAME_INTERVAL = 1000 / 60;
+            const THREE_DEPENDENCIES = [
+                {
+                    urls: [
+                        'https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js',
+                        'https://unpkg.com/three@0.140.0/build/three.min.js'
+                    ],
+                    ready: () => Boolean(window.THREE)
+                },
+                {
+                    urls: [
+                        'https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/controls/OrbitControls.js',
+                        'https://unpkg.com/three@0.140.0/examples/js/controls/OrbitControls.js'
+                    ],
+                    ready: () => Boolean(window.THREE && window.THREE.OrbitControls)
+                },
+                {
+                    urls: [
+                        'https://cdn.jsdelivr.net/npm/three@0.140.0/examples/js/loaders/GLTFLoader.js',
+                        'https://unpkg.com/three@0.140.0/examples/js/loaders/GLTFLoader.js'
+                    ],
+                    ready: () => Boolean(window.THREE && window.THREE.GLTFLoader)
+                }
+            ];
+
+            function inject3DScript(src, isReady) {
+                return new Promise((resolve, reject) => {
+                    if (isReady()) {
+                        resolve();
+                        return;
+                    }
+
+                    const absoluteSrc = new URL(src, document.baseURI).href;
+                    let script = Array.from(document.scripts).find((item) => item.src === absoluteSrc);
+                    const handleLoad = () => {
+                        cleanup();
+                        if (isReady()) {
+                            script.dataset.dynamicLoadState = 'loaded';
+                            resolve();
+                        } else {
+                            script.remove();
+                            reject(new Error(`脚本已加载但未提供预期接口: ${src}`));
+                        }
+                    };
+                    const handleError = () => {
+                        cleanup();
+                        script.remove();
+                        reject(new Error(`无法加载脚本: ${src}`));
+                    };
+                    const cleanup = () => {
+                        script.removeEventListener('load', handleLoad);
+                        script.removeEventListener('error', handleError);
+                    };
+
+                    if (script && script.dataset.dynamicLoadState === 'loaded') {
+                        script.remove();
+                        script = null;
+                    }
+                    let shouldAppend = false;
+                    if (!script) {
+                        script = document.createElement('script');
+                        script.src = src;
+                        script.async = true;
+                        script.dataset.threeDependency = 'true';
+                        shouldAppend = true;
+                    }
+                    script.addEventListener('load', handleLoad, { once: true });
+                    script.addEventListener('error', handleError, { once: true });
+                    if (shouldAppend) document.head.appendChild(script);
+                });
+            }
+
+            async function load3DDependency(dependency) {
+                if (dependency.ready()) return;
+                let lastError;
+                for (const url of dependency.urls) {
+                    try {
+                        await inject3DScript(url, dependency.ready);
+                        return;
+                    } catch (error) {
+                        lastError = error;
+                    }
+                }
+                throw lastError;
+            }
+
+            function loadThreeDependencies() {
+                if (THREE_DEPENDENCIES.every((dependency) => dependency.ready())) {
+                    return Promise.resolve();
+                }
+                if (!threeDependenciesPromise) {
+                    threeDependenciesPromise = THREE_DEPENDENCIES.reduce(
+                        (promise, dependency) => promise.then(() => load3DDependency(dependency)),
+                        Promise.resolve()
+                    ).catch((error) => {
+                        threeDependenciesPromise = null;
+                        throw error;
+                    });
+                }
+                return threeDependenciesPromise;
+            }
 
             function update3DRendererSize() {
                 const container = document.getElementById('model-container');
@@ -6516,16 +6614,41 @@
                 renderer.setSize(width, height, false);
                 camera.aspect = width / height;
                 camera.updateProjectionMatrix();
+                request3DRender();
             }
 
             function setModelLoadingStatus(message, progress) {
-                const status = document.getElementById('model-loading-status');
+                let status = document.getElementById('model-loading-status');
+                if (!status && message) {
+                    const container = document.getElementById('model-container');
+                    if (!container) return;
+                    status = document.createElement('div');
+                    status.id = 'model-loading-status';
+                    status.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 18px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:15px;z-index:1002;pointer-events:none;white-space:nowrap;';
+                    container.appendChild(status);
+                }
                 if (!status) return;
                 status.textContent = message;
                 status.style.display = message ? 'block' : 'none';
                 if (typeof progress === 'number') {
                     status.dataset.progress = String(Math.round(progress));
                 }
+            }
+
+            function dispose3DObject(object) {
+                if (!object) return;
+                object.traverse((node) => {
+                    if (node.geometry) node.geometry.dispose();
+                    if (node.material) {
+                        const materials = Array.isArray(node.material) ? node.material : [node.material];
+                        materials.forEach((material) => {
+                            Object.values(material).forEach((value) => {
+                                if (value && value.isTexture) value.dispose();
+                            });
+                            material.dispose();
+                        });
+                    }
+                });
             }
             
             // 初始化3D场景
@@ -6651,6 +6774,15 @@
                     controls.dampingFactor = 0.05; // 阻尼系数
                     controls.minPolarAngle = 0; // 最小极角
                     controls.maxPolarAngle = Math.PI; // 最大极角
+                    controls.addEventListener('start', () => {
+                        controlsInteracting = true;
+                        request3DRender();
+                    });
+                    controls.addEventListener('change', request3DRender);
+                    controls.addEventListener('end', () => {
+                        controlsInteracting = false;
+                        request3DRender();
+                    });
                     
                     console.log('OrbitControls initialized successfully with zoom limits');
                 } catch (error) {
@@ -6659,6 +6791,7 @@
                 }
                 
                 console.log('3D scene initialized successfully');
+                request3DRender();
             }
             
             // 加载GLB模型
@@ -6713,6 +6846,7 @@
                             // 确保场景存在（防止异步加载完成时场景已被销毁）
                             if (!scene || loadToken !== modelLoadToken) {
                                 console.warn('Scene is null, cannot add model');
+                                dispose3DObject(gltf.scene);
                                 return;
                             }
                             
@@ -6751,15 +6885,19 @@
                             
                             console.log('Model added to scene');
                             setModelLoadingStatus('');
+                            request3DRender();
                         },
                         function (xhr) {
+                            if (loadToken !== modelLoadToken) return;
                             const percent = xhr.total ? (xhr.loaded / xhr.total * 100) : 0;
                             console.log('Loading progress:', percent + '%');
                             setModelLoadingStatus(xhr.total ? `正在加载建筑模型… ${Math.round(percent)}%` : '正在加载建筑模型…');
                         },
                         function (error) {
+                            if (loadToken !== modelLoadToken) return;
                             console.error('Error loading model:', error);
                             setModelLoadingStatus('模型加载失败，请稍后重试');
+                            modelDependencyLoadFailed = true;
                         }
                     );
                 } catch (error) {
@@ -6782,40 +6920,52 @@
                     model = new THREE.Mesh(geometry, material);
                     scene.add(model);
                     console.log('Added fallback cube since GLTFLoader failed');
+                    request3DRender();
                 }
             }
             
-            // 渲染循环
-            function animate3D() {
-                animationFrameId = requestAnimationFrame(animate3D);
-                if (controls) controls.update();
-                if (renderer && scene && camera) {
+            // 仅在场景变化或阻尼仍在运动时渲染；交互期间保持原有的 60fps 手感。
+            function request3DRender() {
+                renderRequested = true;
+                if (!isModelVisible || document.hidden || animationFrameId !== null) return;
+                animationFrameId = requestAnimationFrame(render3DFrame);
+            }
+
+            function render3DFrame(timestamp) {
+                animationFrameId = null;
+                if (!isModelVisible || document.hidden || !renderer || !scene || !camera) return;
+
+                const elapsed = timestamp - lastRenderTime;
+                if (lastRenderTime && elapsed < THREE_FRAME_INTERVAL) {
+                    animationFrameId = requestAnimationFrame(render3DFrame);
+                    return;
+                }
+
+                lastRenderTime = timestamp;
+                const wasRequested = renderRequested;
+                renderRequested = false;
+                const controlsChanged = controls ? controls.update() : false;
+                if (wasRequested || controlsChanged || controlsInteracting) {
                     renderer.render(scene, camera);
+                }
+                if (renderRequested || controlsChanged || controlsInteracting) {
+                    request3DRender();
                 }
             }
             
             // 清理3D资源
             function dispose3DScene() {
+                modelViewToken++;
                 modelLoadToken++;
+                renderRequested = false;
+                controlsInteracting = false;
+                lastRenderTime = 0;
                 if (animationFrameId !== null) {
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = null;
                 }
 
-                if (model) {
-                    model.traverse((node) => {
-                        if (node.geometry) node.geometry.dispose();
-                        if (node.material) {
-                            const materials = Array.isArray(node.material) ? node.material : [node.material];
-                            materials.forEach((material) => {
-                                Object.values(material).forEach((value) => {
-                                    if (value && value.isTexture) value.dispose();
-                                });
-                                material.dispose();
-                            });
-                        }
-                    });
-                }
+                dispose3DObject(model);
 
                 if (controls) {
                     controls.dispose();
@@ -6835,6 +6985,18 @@
                 model = null;
                 controls = null;
             }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    if (animationFrameId !== null) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                } else if (isModelVisible) {
+                    lastRenderTime = 0;
+                    request3DRender();
+                }
+            });
             
             // 创建并显示3D模型操作提示
             function createModelHint() {
@@ -6911,12 +7073,20 @@
             }
             
             // 切换3D模型显示
-            function toggle3DModel(pageIndex) {
+            async function toggle3DModel(pageIndex) {
                 currentPageIndex = pageIndex;
                 const modelContainer = document.getElementById('model-container');
                 const secondaryPage = document.getElementById('secondary-page');
-                
-                if (!isModelVisible) {
+
+                if (!isModelVisible || modelDependencyLoadFailed) {
+                    // 模型文件加载失败后再次点击会重建场景；先释放旧的
+                    // WebGL/OrbitControls 资源，避免重试成功但遗留后台上下文。
+                    if (isModelVisible && modelDependencyLoadFailed) {
+                        dispose3DScene();
+                    }
+                    const viewToken = ++modelViewToken;
+                    isModelVisible = true;
+                    modelDependencyLoadFailed = false;
                     // 显示3D模型
                     modelContainer.style.display = 'block';
                     
@@ -6930,27 +7100,51 @@
                         modelContainer.style.backgroundColor = 'transparent';
                     }
                     
-                    init3DScene();
-                    loadGLBModel();
-                    animate3D();
-                    
                     // 重新绑定关闭按钮事件，确保按钮可见且可用
                     bindCloseModelBtn();
-                    
+                    setModelLoadingStatus('正在加载3D组件…');
+
+                    try {
+                        await loadThreeDependencies();
+                    } catch (error) {
+                        if (viewToken === modelViewToken && isModelVisible) {
+                            console.error('Failed to load 3D dependencies:', error);
+                            setModelLoadingStatus('3D组件加载失败，请检查网络后重试');
+                            modelDependencyLoadFailed = true;
+                        }
+                        return;
+                    }
+
+                    if (viewToken !== modelViewToken || !isModelVisible) return;
+                    init3DScene();
+                    loadGLBModel();
+                    request3DRender();
+
                     // 创建并显示操作提示
                     createModelHint();
-                    
-                    isModelVisible = true;
                 } else {
                     // 隐藏3D模型
                     modelContainer.style.display = 'none';
+                    hideModelHint();
                     dispose3DScene();
                     isModelVisible = false;
+                    modelDependencyLoadFailed = false;
                 }
             }
             
             // 显示指定页面
             function showPage(index, direction) {
+                // 翻页时若 3D 正在显示（或仍在加载），先按关闭路径释放资源，
+                // 防止新页内容在旧模型遮罩后继续运行。
+                if (isModelVisible) {
+                    const modelContainer = document.getElementById('model-container');
+                    if (modelContainer) modelContainer.style.display = 'none';
+                    hideModelHint();
+                    dispose3DScene();
+                    isModelVisible = false;
+                    modelDependencyLoadFailed = false;
+                }
+
                 // 隐藏所有页面
                 const pages = document.querySelectorAll('.book-page');
                 const currentPage = document.getElementById(`page-${currentPageIndex}`);
@@ -7168,14 +7362,7 @@
                                 
                                 // 延迟显示模型，确保页面切换完成
                                 setTimeout(() => {
-                                    const page = document.getElementById(`page-${index}`);
-                                    if (page) {
-                                        const image = page.querySelector('.page-image');
-                                        if (image) {
-                                            // 模拟点击图片事件来显示模型
-                                            image.click();
-                                        }
-                                    }
+                                    toggle3DModel(index);
                                 }, 500);
                             }
                         });
@@ -7353,33 +7540,54 @@
                 let mouseY = 0;
                 let circleX = 0;
                 let circleY = 0;
+                let dotNeedsUpdate = false;
+                let followerFrameId = null;
+
+                function scheduleFollowerFrame() {
+                    if (followerFrameId !== null || document.hidden || mouseFollower.style.display === 'none') return;
+                    followerFrameId = requestAnimationFrame(animate);
+                }
                 
                 // 鼠标移动事件
                 document.addEventListener('mousemove', (e) => {
                     mouseX = e.clientX;
                     mouseY = e.clientY;
-                    
-                    // 直接更新小圆点位置
-                    mouseDot.style.left = mouseX + 'px';
-                    mouseDot.style.top = mouseY + 'px';
-                });
+                    dotNeedsUpdate = true;
+                    scheduleFollowerFrame();
+                }, { passive: true });
                 
                 // 动画循环，实现圆圈追逐圆点
                 function animate() {
+                    followerFrameId = null;
+                    if (document.hidden || mouseFollower.style.display === 'none') return;
+
+                    if (dotNeedsUpdate) {
+                        mouseDot.style.left = mouseX + 'px';
+                        mouseDot.style.top = mouseY + 'px';
+                        dotNeedsUpdate = false;
+                    }
+
                     // 计算圆圈到圆点的距离
                     const dx = mouseX - circleX;
                     const dy = mouseY - circleY;
                     
                     // 平滑追逐效果
-                    circleX += dx * 0.1;
-                    circleY += dy * 0.1;
+                    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) {
+                        circleX = mouseX;
+                        circleY = mouseY;
+                    } else {
+                        circleX += dx * 0.1;
+                        circleY += dy * 0.1;
+                    }
                     
                     // 更新圆圈位置
                     mouseCircle.style.left = circleX + 'px';
                     mouseCircle.style.top = circleY + 'px';
                     
-                    // 继续动画
-                    requestAnimationFrame(animate);
+                    // 追上鼠标后停止 RAF，下一次移动时再启动。
+                    if (circleX !== mouseX || circleY !== mouseY || dotNeedsUpdate) {
+                        scheduleFollowerFrame();
+                    }
                 }
                 
                 // 鼠标点击事件
@@ -7390,8 +7598,14 @@
                     }, 150);
                 });
                 
-                // 启动动画
-                animate();
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden && followerFrameId !== null) {
+                        cancelAnimationFrame(followerFrameId);
+                        followerFrameId = null;
+                    } else if (!document.hidden && (circleX !== mouseX || circleY !== mouseY || dotNeedsUpdate)) {
+                        scheduleFollowerFrame();
+                    }
+                });
             }
         })();
         
